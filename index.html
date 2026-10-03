@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Controle de Empenhos e Estoque</title>
+<style>
+:root{
+  --bg:#0f1720; --panel:#16212c; --panel2:#1c2a37; --line:#2a3b49;
+  --text:#e7edf3; --muted:#8fa3b3; --accent:#3d8f6f; --accent2:#c9924f;
+  --danger:#c05a5a; --ok:#3d8f6f;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing:border-box;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f6f8; --panel:#ffffff; --panel2:#eef2f5; --line:#dbe2e8;
+    --text:#1b2530; --muted:#5c6b78;
+  }
+}
+*{box-sizing:border-box}
+html{scroll-padding-top: env(safe-area-inset-top, 0px);}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+  font-size:15px; line-height:1.45;
+}
+header{
+  padding:18px 20px 14px; border-bottom:1px solid var(--line);
+  position:sticky; top:env(safe-area-inset-top,0px); background:var(--bg); z-index:10;
+}
+header h1{margin:0 0 4px; font-size:1.3rem; font-weight:700; letter-spacing:.2px}
+header p{margin:0; color:var(--muted); font-size:.85rem}
+nav{display:flex; gap:6px; padding:12px 20px 0; flex-wrap:wrap}
+nav button{
+  background:var(--panel); border:1px solid var(--line); color:var(--muted);
+  padding:9px 14px; border-radius:7px; cursor:pointer; font-size:.85rem; font-weight:600;
+}
+nav button.active{background:var(--accent); color:#fff; border-color:var(--accent)}
+main{padding:16px 20px 60px; max-width:1100px; margin:0 auto}
+.card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:16px}
+.card h2{margin:0 0 14px; font-size:1.05rem}
+.grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px}
+label{display:block; font-size:.78rem; color:var(--muted); margin-bottom:4px; font-weight:600}
+input,select{
+  width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--line);
+  background:var(--panel2); color:var(--text); font-size:.9rem;
+}
+input:focus,select:focus{outline:2px solid var(--accent); outline-offset:1px}
+.field{margin-bottom:2px}
+.actions{margin-top:14px; display:flex; gap:10px; align-items:center}
+button.primary{
+  background:var(--accent); color:#fff; border:none; padding:10px 18px;
+  border-radius:7px; cursor:pointer; font-weight:600; font-size:.9rem;
+}
+button.primary:hover{opacity:.92}
+button.danger{background:transparent; color:var(--danger); border:1px solid var(--danger); padding:5px 10px; border-radius:6px; cursor:pointer; font-size:.75rem}
+#btn-add-linha{background:var(--panel2); color:var(--text); border:1px solid var(--line); padding:10px 16px; border-radius:7px; cursor:pointer; font-weight:600; font-size:.85rem}
+#btn-add-linha:hover{border-color:var(--accent)}
+.grupo-empenho{border:1px solid var(--line); border-radius:10px; margin-bottom:14px; overflow:hidden}
+.grupo-header{background:var(--panel2); padding:12px 16px; display:flex; flex-wrap:wrap; gap:6px 20px; align-items:center; justify-content:space-between}
+.grupo-header .info{display:flex; flex-wrap:wrap; gap:4px 18px; font-size:.8rem; color:var(--muted)}
+.grupo-header .info b{color:var(--text)}
+.grupo-header .totais{display:flex; gap:16px; font-size:.82rem}
+.grupo-header .totais span strong{display:block; font-size:.95rem}
+.nf-detail-row td{background:var(--panel2); padding:0}
+.nf-detail-inner{padding:12px 16px}
+.nf-detail-inner table{min-width:0}
+.btn-link{background:none; border:1px solid var(--line); color:var(--text); padding:6px 12px; border-radius:6px; cursor:pointer; font-size:.78rem; font-weight:600}
+.btn-link:hover{border-color:var(--accent)}
+.msg{font-size:.85rem; padding:8px 10px; border-radius:6px; margin-top:10px}
+.msg.ok{background:rgba(61,143,111,.15); color:var(--ok)}
+.msg.err{background:rgba(192,90,90,.15); color:var(--danger)}
+.tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:8px}
+table{width:100%; border-collapse:collapse; font-size:.82rem; min-width:700px}
+th,td{padding:8px 10px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap}
+th{background:var(--panel2); color:var(--muted); font-weight:600; font-size:.72rem; text-transform:uppercase; letter-spacing:.4px}
+tr:last-child td{border-bottom:none}
+.saldo-baixo{color:var(--danger); font-weight:700}
+.saldo-zero{color:var(--muted); text-decoration:line-through}
+.pill{display:inline-block; padding:2px 8px; border-radius:20px; font-size:.7rem; font-weight:700}
+.pill.ok{background:rgba(61,143,111,.18); color:var(--ok)}
+.pill.warn{background:rgba(201,146,79,.18); color:var(--accent2)}
+.pill.off{background:var(--panel2); color:var(--muted)}
+.empty{color:var(--muted); font-size:.85rem; padding:20px; text-align:center}
+.search{margin-bottom:12px}
+.summary{display:flex; gap:16px; flex-wrap:wrap; margin-bottom:12px}
+.summary div{background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:10px 14px; font-size:.8rem}
+.summary strong{display:block; font-size:1.1rem; margin-top:2px}
+.hidden{display:none}
+.login-wrap{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px}
+.login-card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:28px; width:100%; max-width:380px}
+.login-card h1{font-size:1.2rem; margin:0 0 4px}
+.login-card > p{color:var(--muted); font-size:.85rem; margin:0 0 18px}
+.login-card .field{margin-bottom:14px}
+.login-card .actions{flex-direction:column; align-items:stretch}
+.login-card .actions button{width:100%}
+#btn-criar-conta{background:var(--panel2); color:var(--text); border:1px solid var(--line); padding:10px 18px; border-radius:7px; cursor:pointer; font-weight:600; font-size:.9rem}
+header .head-row{display:flex; justify-content:space-between; align-items:flex-start; gap:12px}
+#user-email{color:var(--muted); font-size:.78rem}
+#btn-sair{background:none; border:1px solid var(--line); color:var(--text); padding:6px 12px; border-radius:6px; cursor:pointer; font-size:.78rem; white-space:nowrap}
+</style>
+</head>
+<body>
+
+<div id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <h1>Controle de Empenhos &amp; Estoque</h1>
+    <p>Entre com seu email e senha para acessar de qualquer computador.</p>
+    <div class="field"><label>Email</label><input id="login-email" type="email" placeholder="voce@exemplo.com"></div>
+    <div class="field"><label>Senha</label><input id="login-senha" type="password" placeholder="Mínimo 6 caracteres"></div>
+    <div class="actions">
+      <button class="primary" id="btn-entrar" type="button">Entrar</button>
+      <button id="btn-criar-conta" type="button">Criar conta</button>
+    </div>
+    <div id="login-msg" class="msg hidden"></div>
+  </div>
+</div>
+
+<div id="app-wrap" class="hidden">
+<header>
+  <div class="head-row">
+    <div>
+      <h1>Controle de Empenhos &amp; Estoque</h1>
+      <p>Cadastro de notas de empenho por item e baixa por notas fiscais</p>
+    </div>
+    <div style="text-align:right">
+      <div id="user-email"></div>
+      <button id="btn-sair" type="button">Sair</button>
+    </div>
+  </div>
+</header>
+
+<nav>
+  <button data-tab="cadastro" class="active">Cadastrar Empenho</button>
+  <button data-tab="saldos">Saldos de Empenho</button>
+  <button data-tab="baixa">Registrar Nota Fiscal</button>
+  <button data-tab="historico">Histórico de NFs</button>
+</nav>
+
+<main>
+
+  <section id="tab-cadastro" class="tab">
+    <div class="card" id="card-multi">
+      <h2>Cadastrar nota de empenho</h2>
+      <p style="color:var(--muted); font-size:.78rem; margin-top:-8px; margin-bottom:14px">Preencha os dados comuns da nota de empenho uma vez e adicione quantos itens forem necessários.</p>
+      <div class="grid">
+        <div class="field"><label>Pregão / Processo</label><input id="m-pregao" placeholder="Ex: 5003/2024"></div>
+        <div class="field"><label>Vigência</label><input id="m-vigencia" type="date"></div>
+        <div class="field"><label>Número da nota de empenho (NE)</label><input id="m-numero" placeholder="Ex: 2025NE1"></div>
+        <div class="field"><label>Empresa favorecida</label><input id="m-empresa" placeholder="Razão social"></div>
+        <div class="field"><label>SOLEMP</label><input id="m-solemp" placeholder="Ex: SOL-003"></div>
+      </div>
+      <div class="tablewrap" style="margin-top:16px">
+        <table id="tbl-multi-itens">
+          <thead><tr><th>Item</th><th>UF</th><th>Vlr. unit. (R$)</th><th>Quantidade</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <datalist id="unidades"><option>KG</option><option>UN</option><option>PC</option><option>LT</option><option>CX</option><option>PCT</option></datalist>
+      <div class="actions">
+        <button id="btn-add-linha" type="button">+ Adicionar item</button>
+        <button class="primary" id="btn-salvar-multi">Salvar todos os itens</button>
+        <span id="msg-multi"></span>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-saldos" class="tab hidden">
+    <div class="card">
+      <h2>Empenhos e saldos</h2>
+      <input class="search" id="busca-saldo" placeholder="Buscar por número, empresa, pregão ou item...">
+      <div id="saldos-container"></div>
+    </div>
+  </section>
+
+  <section id="tab-baixa" class="tab hidden">
+    <div class="card">
+      <h2>Registrar nota fiscal</h2>
+      <div class="grid">
+        <div class="field"><label>Número da nota fiscal</label><input id="nf-numero" placeholder="Ex: 55321"></div>
+        <div class="field"><label>Data de recebimento</label><input id="nf-data" type="date"></div>
+        <div class="field"><label>Número do empenho (NE) vinculado</label><select id="nf-ne"></select></div>
+      </div>
+      <div id="nf-itens-wrap" class="hidden" style="margin-top:18px">
+        <label>Itens deste empenho — informe a quantidade comprada nesta nota fiscal</label>
+        <div class="tablewrap" style="margin-top:8px">
+          <table id="tbl-nf-itens">
+            <thead><tr><th>Item</th><th>UF</th><th>Vlr. unit.</th><th>Saldo atual</th><th>Qtd. nesta NF</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="primary" id="btn-baixar">Registrar nota fiscal</button>
+        <span id="msg-baixa"></span>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-historico" class="tab hidden">
+    <div class="card">
+      <h2>Histórico de notas fiscais</h2>
+      <div class="summary" id="resumo-nf"></div>
+      <div class="actions" style="margin-top:0; margin-bottom:12px"><button class="primary" id="btn-export-nf" style="background:var(--panel2); color:var(--text); border:1px solid var(--line)">Exportar CSV</button></div>
+      <div class="tablewrap">
+        <table id="tbl-nf">
+          <thead><tr>
+            <th>NF nº</th><th>Data</th><th>Nota de empenho</th><th>Valor total da NF</th><th></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import {
+  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, where, writeBatch
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getStorage } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
+
+window.addEventListener('error', function(e){
+  const msg = document.getElementById('login-msg');
+  if(msg){ msg.classList.remove('hidden'); msg.className='msg err'; msg.textContent='Erro no sistema: '+e.message; }
+  console.error('Erro capturado:', e.error || e.message);
+});
+
+const firebaseConfig = {
+  apiKey: "AIzaSyByGOrrqBmkKfJvt0FKgMWdqC8DEnW7eu0",
+  authDomain: "controle-do-fiel.firebaseapp.com",
+  projectId: "controle-do-fiel",
+  storageBucket: "controle-do-fiel.firebasestorage.app",
+  messagingSenderId: "1030664699389",
+  appId: "1:1030664699389:web:6f151985c892b7d2e2ed94"
+};
+
+let auth, db, storage, usuarioAtual = null;
+try{
+  const app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+  storage = getStorage(app);
+}catch(initErr){
+  console.error(initErr);
+  window.addEventListener('DOMContentLoaded', ()=>{
+    const msg = document.getElementById('login-msg');
+    msg.classList.remove('hidden'); msg.className='msg err';
+    msg.textContent = 'Erro ao iniciar o sistema: '+initErr.message;
+  });
+}
+
+let empenhos = [];
+let notasFiscais = [];
+
+function fmtMoney(v){ return (Number(v)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+
+function empenhoFromDoc(d){
+  const r = d.data();
+  return { id:d.id, pregao:r.pregao||'', vigencia:r.vigencia||'', numero:r.numero, empresa:r.empresaNome||'',
+    solemp:r.solemp||'', item:r.item, uf:r.uf||'', vunit:Number(r.valorUnitario), qtd:Number(r.quantidade),
+    valorTotal:Number(r.valorTotal), saldoQtd:Number(r.saldoQtd), saldoValor:Number(r.saldoValor) };
+}
+function nfFromDoc(d){
+  const r = d.data();
+  return { id:d.id, numeroNF:r.numeroNF, data:r.data, empenhoId:r.empenhoId, numeroEmpenho:r.numeroEmpenho,
+    item:r.item, qtd:Number(r.quantidade), valorBaixado:Number(r.valorBaixado),
+    saldoAposQtd:Number(r.saldoQtdApos), saldoAposValor:Number(r.saldoValorApos) };
+}
+
+async function carregarDados(){
+  const uidAtual = usuarioAtual.uid;
+  const [empSnap, nfSnap] = await Promise.all([
+    getDocs(query(collection(db,'empenhos'), where('userId','==',uidAtual))),
+    getDocs(query(collection(db,'notasFiscais'), where('userId','==',uidAtual)))
+  ]);
+  empenhos = empSnap.docs.map(empenhoFromDoc);
+  notasFiscais = nfSnap.docs.map(nfFromDoc);
+}
+
+// ---- Login / Autenticação ----
+function mostrarLogin(){
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('app-wrap').classList.add('hidden');
+}
+async function mostrarApp(user){
+  usuarioAtual = user;
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app-wrap').classList.remove('hidden');
+  document.getElementById('user-email').textContent = user.email;
+  await carregarDados();
+  renderSaldos(); renderSelectNE(); renderHistorico();
+}
+function loginMsg(texto, ok){
+  const msg = document.getElementById('login-msg');
+  msg.className = 'msg ' + (ok?'ok':'err');
+  msg.textContent = texto;
+}
+document.getElementById('btn-entrar').addEventListener('click', async ()=>{
+  if(!auth){ loginMsg('O sistema não inicializou corretamente. Recarregue a página.', false); return; }
+  const email = document.getElementById('login-email').value.trim();
+  const senha = document.getElementById('login-senha').value;
+  if(!email || !senha){ loginMsg('Preencha email e senha.', false); return; }
+  try{
+    const cred = await signInWithEmailAndPassword(auth, email, senha);
+    mostrarApp(cred.user);
+  }catch(err){ loginMsg('Erro ao entrar: '+traduzErroFirebase(err), false); }
+});
+document.getElementById('btn-criar-conta').addEventListener('click', async ()=>{
+  if(!auth){ loginMsg('O sistema não inicializou corretamente. Recarregue a página.', false); return; }
+  const email = document.getElementById('login-email').value.trim();
+  const senha = document.getElementById('login-senha').value;
+  if(!email || !senha){ loginMsg('Preencha email e senha para criar a conta.', false); return; }
+  if(senha.length<6){ loginMsg('A senha deve ter ao menos 6 caracteres.', false); return; }
+  try{
+    const cred = await createUserWithEmailAndPassword(auth, email, senha);
+    mostrarApp(cred.user);
+  }catch(err){ loginMsg('Erro ao criar conta: '+traduzErroFirebase(err), false); }
+});
+document.getElementById('btn-sair').addEventListener('click', async ()=>{
+  if(!auth) return;
+  await signOut(auth);
+  usuarioAtual = null;
+  mostrarLogin();
+});
+function traduzErroFirebase(err){
+  const c = err.code||'';
+  if(c.includes('email-already-in-use')) return 'Este email já tem uma conta. Tente entrar em vez de criar conta.';
+  if(c.includes('invalid-credential') || c.includes('wrong-password') || c.includes('user-not-found')) return 'Email ou senha incorretos.';
+  if(c.includes('invalid-email')) return 'Email inválido.';
+  if(c.includes('weak-password')) return 'Senha muito fraca (mínimo 6 caracteres).';
+  return err.message;
+}
+if(auth){
+  onAuthStateChanged(auth, (user)=>{
+    if(user) mostrarApp(user); else mostrarLogin();
+  });
+}
+
+// ---- Tabs ----
+
+document.querySelectorAll('nav button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab').forEach(t=>t.classList.add('hidden'));
+    document.getElementById('tab-'+btn.dataset.tab).classList.remove('hidden');
+    if(btn.dataset.tab==='saldos') renderSaldos();
+    if(btn.dataset.tab==='baixa') renderSelectNE();
+    if(btn.dataset.tab==='historico') renderHistorico();
+  });
+});
+
+// ---- Cadastro em lote (vários itens no mesmo empenho) ----
+if(document.querySelectorAll('#tbl-multi-itens tbody tr').length===0){
+  addLinhaMulti(); addLinhaMulti(); addLinhaMulti();
+}
+
+function addLinhaMulti(){
+  const tbody = document.querySelector('#tbl-multi-itens tbody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" class="m-item" placeholder="Descrição do item"></td>
+    <td><input type="text" class="m-uf" placeholder="KG, UN..." list="unidades" style="width:80px"></td>
+    <td><input type="number" class="m-vunit" step="0.01" min="0" style="width:110px"></td>
+    <td><input type="number" class="m-qtd" step="1" min="0" style="width:90px"></td>
+    <td><button class="danger" type="button" onclick="this.closest('tr').remove()">Remover</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+document.getElementById('btn-add-linha').addEventListener('click', addLinhaMulti);
+
+document.getElementById('btn-salvar-multi').addEventListener('click', async ()=>{
+  const pregao = document.getElementById('m-pregao').value.trim();
+  const vigencia = document.getElementById('m-vigencia').value || null;
+  const numero = document.getElementById('m-numero').value.trim();
+  const empresa = document.getElementById('m-empresa').value.trim();
+  const solemp = document.getElementById('m-solemp').value.trim();
+  const msg = document.getElementById('msg-multi');
+
+  if(!numero || !empresa){
+    msg.className='msg err'; msg.textContent='Preencha ao menos o número da nota de empenho e a empresa favorecida.';
+    return;
+  }
+
+  const linhas = [...document.querySelectorAll('#tbl-multi-itens tbody tr')];
+  const rows = [];
+  linhas.forEach(tr=>{
+    const item = tr.querySelector('.m-item').value.trim();
+    const uf = tr.querySelector('.m-uf').value.trim();
+    const vunit = parseFloat(tr.querySelector('.m-vunit').value);
+    const qtd = parseInt(tr.querySelector('.m-qtd').value);
+    if(!item || isNaN(vunit) || isNaN(qtd) || vunit<0 || qtd<0) return; // ignora linhas incompletas/vazias
+    const valorTotal = vunit*qtd;
+    rows.push({ pregao, vigencia, numero, empresaNome:empresa, solemp, item, uf,
+      valorUnitario:vunit, quantidade:qtd, valorTotal:valorTotal, saldoQtd:qtd, saldoValor:valorTotal,
+      userId: usuarioAtual.uid, createdAt: Date.now() });
+  });
+
+  if(rows.length===0){
+    msg.className='msg err'; msg.textContent='Nenhum item válido para salvar — preencha item, valor unitário e quantidade em ao menos uma linha.';
+    return;
+  }
+
+  let salvos;
+  try{
+    salvos = await Promise.all(rows.map(async r=>{
+      const ref = await addDoc(collection(db,'empenhos'), r);
+      return { id: ref.id, pregao:r.pregao, vigencia:r.vigencia, numero:r.numero, empresa:r.empresaNome,
+        solemp:r.solemp, item:r.item, uf:r.uf, vunit:r.valorUnitario, qtd:r.quantidade,
+        valorTotal:r.valorTotal, saldoQtd:r.saldoQtd, saldoValor:r.saldoValor };
+    }));
+  }catch(err){ msg.className='msg err'; msg.textContent='Erro ao salvar: '+err.message; return; }
+
+  empenhos.push(...salvos);
+  msg.className='msg ok'; msg.textContent=`${salvos.length} item(ns) salvo(s) no empenho ${numero}.`;
+  document.querySelector('#tbl-multi-itens tbody').innerHTML='';
+  ['m-pregao','m-vigencia','m-numero','m-empresa','m-solemp'].forEach(id=>document.getElementById(id).value='');
+  addLinhaMulti(); addLinhaMulti(); addLinhaMulti();
+});
+
+// ---- Saldos agrupados por empenho ----
+function renderSaldos(){
+  const container = document.getElementById('saldos-container');
+  const q = document.getElementById('busca-saldo').value.toLowerCase();
+
+  const grupos = {};
+  const ordem = [];
+  empenhos.forEach(e=>{
+    if(!grupos[e.numero]){ grupos[e.numero] = []; ordem.push(e.numero); }
+    grupos[e.numero].push(e);
+  });
+
+  // filtra: mantém o empenho inteiro se ele ou algum item bater na busca
+  const numerosFiltrados = ordem.filter(ne=>{
+    if(!q) return true;
+    if(ne.toLowerCase().includes(q)) return true;
+    return grupos[ne].some(e => e.empresa.toLowerCase().includes(q) || e.item.toLowerCase().includes(q) || (e.pregao||'').toLowerCase().includes(q));
+  });
+
+  if(numerosFiltrados.length===0){
+    container.innerHTML = `<div class="empty">Nenhum item de empenho cadastrado ainda.</div>`;
+    return;
+  }
+
+  container.innerHTML = numerosFiltrados.map(ne=>{
+    const itens = grupos[ne];
+    const first = itens[0];
+    const totalValor = itens.reduce((s,e)=>s+e.valorTotal,0);
+    const totalSaldo = itens.reduce((s,e)=>s+e.saldoValor,0);
+
+    const linhas = itens.map(e=>{
+      let statusHtml;
+      if(e.saldoQtd<=0) statusHtml = `<span class="pill off">Esgotado</span>`;
+      else if(e.saldoQtd < e.qtd*0.2) statusHtml = `<span class="pill warn">Baixo</span>`;
+      else statusHtml = `<span class="pill ok">Disponível</span>`;
+      const saldoClass = e.saldoQtd<=0 ? 'saldo-zero' : (e.saldoQtd < e.qtd*0.2 ? 'saldo-baixo' : '');
+      return `<tr>
+        <td>${e.item}</td><td>${e.uf||'-'}</td>
+        <td>${fmtMoney(e.vunit)}</td><td>${e.qtd}</td><td>${fmtMoney(e.valorTotal)}</td>
+        <td class="${saldoClass}">${e.saldoQtd}</td><td class="${saldoClass}">${fmtMoney(e.saldoValor)}</td>
+        <td>${statusHtml}</td>
+        <td><button class="danger" onclick="removerEmpenho('${e.id}')">Excluir</button></td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="grupo-empenho">
+      <div class="grupo-header">
+        <div class="info">
+          <span><b>NE:</b> ${ne}</span>
+          <span><b>Pregão:</b> ${first.pregao||'-'}</span>
+          <span><b>Empresa:</b> ${first.empresa}</span>
+          <span><b>SOLEMP:</b> ${first.solemp||'-'}</span>
+          <span><b>Vigência:</b> ${first.vigencia||'-'}</span>
+        </div>
+        <div class="totais">
+          <span>Vlr. total<strong>${fmtMoney(totalValor)}</strong></span>
+          <span>Saldo total<strong>${fmtMoney(totalSaldo)}</strong></span>
+          <span>Itens<strong>${itens.length}</strong></span>
+        </div>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr>
+            <th>Item</th><th>UF</th><th>Vlr. unit.</th><th>Qtd.</th><th>Vlr. total</th>
+            <th>Saldo qtd.</th><th>Saldo R$</th><th>Status</th><th></th>
+          </tr></thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+}
+document.getElementById('busca-saldo').addEventListener('input', renderSaldos);
+
+window.removerEmpenho = async function(id){
+  if(!confirm('Excluir este item de empenho? O histórico de notas fiscais vinculado a ele será mantido, mas perderá a referência.')) return;
+  try{ await deleteDoc(doc(db,'empenhos',id)); }
+  catch(err){ alert('Erro ao excluir: '+err.message); return; }
+  empenhos = empenhos.filter(e=>e.id!==id);
+  renderSaldos();
+};
+
+// ---- Registrar nota fiscal (por empenho, com todos os itens) ----
+function renderSelectNE(){
+  const sel = document.getElementById('nf-ne');
+  const nes = [...new Set(empenhos.map(e=>e.numero))];
+  if(nes.length===0){
+    sel.innerHTML = `<option value="">Nenhum empenho cadastrado</option>`;
+  } else {
+    sel.innerHTML = `<option value="">Selecione o empenho...</option>` + nes.map(ne=>`<option value="${ne}">${ne}</option>`).join('');
+  }
+  document.getElementById('nf-itens-wrap').classList.add('hidden');
+  document.querySelector('#tbl-nf-itens tbody').innerHTML='';
+}
+
+document.getElementById('nf-ne').addEventListener('change', renderItensDoEmpenhoNaNF);
+
+function renderItensDoEmpenhoNaNF(){
+  const ne = document.getElementById('nf-ne').value;
+  const wrap = document.getElementById('nf-itens-wrap');
+  const tbody = document.querySelector('#tbl-nf-itens tbody');
+  if(!ne){ wrap.classList.add('hidden'); tbody.innerHTML=''; return; }
+  const itens = empenhos.filter(e=>e.numero===ne);
+  if(itens.length===0){ wrap.classList.add('hidden'); tbody.innerHTML=''; return; }
+  tbody.innerHTML = itens.map(e=>`
+    <tr data-id="${e.id}">
+      <td>${e.item}</td><td>${e.uf||'-'}</td><td>${fmtMoney(e.vunit)}</td>
+      <td>${e.saldoQtd} un. / ${fmtMoney(e.saldoValor)}</td>
+      <td><input type="number" class="nf-qtd-item" min="0" max="${e.saldoQtd}" step="1" style="width:100px" placeholder="0" ${e.saldoQtd<=0?'disabled':''}></td>
+    </tr>
+  `).join('');
+  wrap.classList.remove('hidden');
+}
+
+document.getElementById('btn-baixar').addEventListener('click', async ()=>{
+  const numeroNF = document.getElementById('nf-numero').value.trim();
+  const data = document.getElementById('nf-data').value || new Date().toISOString().slice(0,10);
+  const ne = document.getElementById('nf-ne').value;
+  const msg = document.getElementById('msg-baixa');
+
+  if(!numeroNF){ msg.className='msg err'; msg.textContent='Informe o número da nota fiscal.'; return; }
+  if(!ne){ msg.className='msg err'; msg.textContent='Selecione o empenho ao qual esta nota está vinculada.'; return; }
+
+  const linhas = [...document.querySelectorAll('#tbl-nf-itens tbody tr')];
+  const paraBaixar = [];
+  let erro = '';
+  linhas.forEach(tr=>{
+    const input = tr.querySelector('.nf-qtd-item');
+    const qtd = parseInt(input.value);
+    if(!qtd || qtd<=0) return;
+    const e = empenhos.find(x=>x.id===tr.dataset.id);
+    if(!e) return;
+    if(qtd > e.saldoQtd){ erro = `Quantidade de "${e.item}" (${qtd}) maior que o saldo disponível (${e.saldoQtd}).`; return; }
+    paraBaixar.push({e, qtd});
+  });
+
+  if(erro){ msg.className='msg err'; msg.textContent=erro; return; }
+  if(paraBaixar.length===0){ msg.className='msg err'; msg.textContent='Informe a quantidade comprada de ao menos um item.'; return; }
+
+  msg.className='msg'; msg.textContent='Registrando...';
+  try{
+    for(const {e,qtd} of paraBaixar){
+      const valorBaixado = qtd*e.vunit;
+      const novoSaldoQtd = e.saldoQtd - qtd;
+      const novoSaldoValor = Math.max(0, e.saldoValor - valorBaixado);
+
+      await updateDoc(doc(db,'empenhos',e.id), {saldoQtd:novoSaldoQtd, saldoValor:novoSaldoValor});
+
+      const nfData = {
+        numeroNF, data, empenhoId:e.id, numeroEmpenho:e.numero, item:e.item,
+        quantidade:qtd, valorBaixado, saldoQtdApos:novoSaldoQtd, saldoValorApos:novoSaldoValor,
+        userId: usuarioAtual.uid, createdAt: Date.now()
+      };
+      const ref = await addDoc(collection(db,'notasFiscais'), nfData);
+
+      e.saldoQtd = novoSaldoQtd;
+      e.saldoValor = novoSaldoValor;
+      notasFiscais.push({ id:ref.id, numeroNF, data, empenhoId:e.id, numeroEmpenho:e.numero, item:e.item,
+        qtd, valorBaixado, saldoAposQtd:novoSaldoQtd, saldoAposValor:novoSaldoValor });
+    }
+  }catch(err){
+    msg.className='msg err'; msg.textContent='Erro ao registrar: '+err.message;
+    return;
+  }
+
+  msg.className='msg ok'; msg.textContent=`Nota fiscal ${numeroNF} registrada: ${paraBaixar.length} item(ns) baixado(s) e saldo do empenho atualizado.`;
+  document.getElementById('nf-numero').value='';
+  document.getElementById('nf-ne').value='';
+  document.getElementById('nf-itens-wrap').classList.add('hidden');
+  document.querySelector('#tbl-nf-itens tbody').innerHTML='';
+});
+
+// ---- Histórico de NFs ----
+function renderHistorico(){
+  const tbody = document.querySelector('#tbl-nf tbody');
+  const resumo = document.getElementById('resumo-nf');
+  if(notasFiscais.length===0){
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">Nenhuma nota fiscal registrada ainda.</td></tr>`;
+    resumo.innerHTML='';
+    return;
+  }
+
+  // agrupa por número da NF + empenho vinculado
+  const grupos = {};
+  const ordem = [];
+  notasFiscais.forEach(n=>{
+    const chave = n.numeroNF + '||' + n.numeroEmpenho;
+    if(!grupos[chave]){ grupos[chave] = { numeroNF:n.numeroNF, numeroEmpenho:n.numeroEmpenho, data:n.data, itens:[] }; ordem.push(chave); }
+    grupos[chave].itens.push(n);
+  });
+
+  const totalNFs = ordem.length;
+  const totalValor = notasFiscais.reduce((s,n)=>s+n.valorBaixado,0);
+  resumo.innerHTML = `
+    <div>Notas fiscais registradas<strong>${totalNFs}</strong></div>
+    <div>Valor total baixado<strong>${fmtMoney(totalValor)}</strong></div>
+  `;
+
+  const chavesOrdenadas = ordem.sort((a,b)=> (grupos[b].data||'').localeCompare(grupos[a].data||''));
+
+  tbody.innerHTML = chavesOrdenadas.map((chave,idx)=>{
+    const g = grupos[chave];
+    const valorTotalNF = g.itens.reduce((s,n)=>s+n.valorBaixado,0);
+    const detailId = 'nf-det-'+idx;
+    const linhasItens = g.itens.map(n=>`
+      <tr>
+        <td>${n.item}</td><td>${n.qtd}</td><td>${fmtMoney(n.valorBaixado)}</td>
+        <td>${n.saldoAposQtd} un. / ${fmtMoney(n.saldoAposValor)}</td>
+        <td><button class="danger" onclick="removerItemNF('${n.id}')">Excluir item</button></td>
+      </tr>`).join('');
+
+    return `
+    <tr>
+      <td>${g.numeroNF}</td><td>${g.data}</td><td>${g.numeroEmpenho}</td><td>${fmtMoney(valorTotalNF)}</td>
+      <td style="display:flex; gap:8px">
+        <button class="btn-link" onclick="document.getElementById('${detailId}').classList.toggle('hidden')">Detalhar</button>
+        <button class="danger" onclick="removerNF('${g.numeroNF.replace(/'/g,"\\'")}','${g.numeroEmpenho.replace(/'/g,"\\'")}')">Excluir NF</button>
+      </td>
+    </tr>
+    <tr class="nf-detail-row hidden" id="${detailId}">
+      <td colspan="5">
+        <div class="nf-detail-inner">
+          <div class="tablewrap">
+            <table>
+              <thead><tr><th>Item</th><th>Qtd. baixada</th><th>Vlr. baixado</th><th>Saldo após</th><th></th></tr></thead>
+              <tbody>${linhasItens}</tbody>
+            </table>
+          </div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+window.removerItemNF = async function(id){
+  const nf = notasFiscais.find(n=>n.id===id);
+  if(!nf) return;
+  if(!confirm('Excluir este item da nota fiscal? O saldo do empenho correspondente será devolvido.')) return;
+  const e = empenhos.find(x=>x.id===nf.empenhoId);
+  try{
+    if(e){
+      const novoSaldoQtd = e.saldoQtd + nf.qtd;
+      const novoSaldoValor = e.saldoValor + nf.valorBaixado;
+      await updateDoc(doc(db,'empenhos',e.id), {saldoQtd:novoSaldoQtd, saldoValor:novoSaldoValor});
+      e.saldoQtd = novoSaldoQtd; e.saldoValor = novoSaldoValor;
+    }
+    await deleteDoc(doc(db,'notasFiscais',id));
+  }catch(err){ alert('Erro ao excluir: '+err.message); return; }
+  notasFiscais = notasFiscais.filter(n=>n.id!==id);
+  renderHistorico();
+};
+
+window.removerNF = async function(numeroNF, numeroEmpenho){
+  if(!confirm(`Excluir a nota fiscal ${numeroNF} inteira? O saldo de todos os itens dela será devolvido ao empenho.`)) return;
+  const doGrupo = notasFiscais.filter(n=>n.numeroNF===numeroNF && n.numeroEmpenho===numeroEmpenho);
+
+  // soma quantidades a devolver por empenho
+  const porEmpenho = {};
+  doGrupo.forEach(nf=>{
+    if(!porEmpenho[nf.empenhoId]) porEmpenho[nf.empenhoId] = {qtd:0, valor:0};
+    porEmpenho[nf.empenhoId].qtd += nf.qtd;
+    porEmpenho[nf.empenhoId].valor += nf.valorBaixado;
+  });
+
+  try{
+    for(const empenhoId in porEmpenho){
+      const e = empenhos.find(x=>x.id===empenhoId);
+      if(!e) continue;
+      const novoSaldoQtd = e.saldoQtd + porEmpenho[empenhoId].qtd;
+      const novoSaldoValor = e.saldoValor + porEmpenho[empenhoId].valor;
+      await updateDoc(doc(db,'empenhos',empenhoId), {saldoQtd:novoSaldoQtd, saldoValor:novoSaldoValor});
+      e.saldoQtd = novoSaldoQtd; e.saldoValor = novoSaldoValor;
+    }
+    await Promise.all(doGrupo.map(nf=>deleteDoc(doc(db,'notasFiscais',nf.id))));
+  }catch(err){ alert('Erro ao excluir: '+err.message); return; }
+
+  notasFiscais = notasFiscais.filter(n=>!(n.numeroNF===numeroNF && n.numeroEmpenho===numeroEmpenho));
+  renderHistorico();
+};
+
+// ---- Exportar CSV ----
+function toCSV(headers, rows){
+  const esc = v => `"${String(v??'').replace(/"/g,'""')}"`;
+  return [headers.map(esc).join(';'), ...rows.map(r=>r.map(esc).join(';'))].join('\r\n');
+}
+function baixarArquivo(nome, conteudo){
+  const blob = new Blob(['\ufeff'+conteudo], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nome;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+document.getElementById('btn-export-nf').addEventListener('click', ()=>{
+  const headers = ['NF','Data','Nota Empenho','Item','Qtd baixada','Valor baixado','Saldo qtd após','Saldo R$ após'];
+  const rows = notasFiscais.map(n=>[n.numeroNF,n.data,n.numeroEmpenho,n.item,n.qtd,n.valorBaixado.toFixed(2),n.saldoAposQtd,n.saldoAposValor.toFixed(2)]);
+  baixarArquivo('historico_notas_fiscais.csv', toCSV(headers, rows));
+});
+
+// init
+document.getElementById('nf-data').valueAsDate = new Date();
+</script>
+</body>
+</html>

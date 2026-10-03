@@ -604,7 +604,7 @@ function renderSelectNE(){
     sel.innerHTML = `<option value="">Nenhum empenho cadastrado</option>`;
   } else {
     sel.innerHTML = `<option value="">Selecione o empenho...</option>` +
-      nes.map(ne=>`<option value="${ne}">Empenho nº ${ne} — ${empresaDoNE(ne)}</option>`).join('');
+      nes.map(ne=>`<option value="${ne}">${ne} — ${empresaDoNE(ne)}</option>`).join('');
   }
   document.getElementById('nf-itens-wrap').classList.add('hidden');
   document.querySelector('#tbl-nf-itens tbody').innerHTML='';

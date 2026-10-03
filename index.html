@@ -64,6 +64,17 @@ button.danger{background:transparent; color:var(--danger); border:1px solid var(
 .grupo-header .info b{color:var(--text)}
 .grupo-header .totais{display:flex; gap:16px; font-size:.82rem}
 .grupo-header .totais span strong{display:block; font-size:.95rem}
+.grupo-empresa{border:1px solid var(--line); border-radius:10px; margin-bottom:14px; overflow:hidden}
+.empresa-header{background:var(--panel); padding:14px 16px; display:flex; flex-wrap:wrap; gap:10px 20px; align-items:center; justify-content:space-between; cursor:pointer; user-select:none}
+.empresa-header:hover{background:var(--panel2)}
+.empresa-header .info{display:flex; align-items:center; gap:12px}
+.empresa-header .seta{display:inline-block; transition:transform .15s; color:var(--muted); font-size:.75rem}
+.empresa-header .seta.aberta{transform:rotate(90deg)}
+.empresa-header .empresa-nome{font-weight:700; font-size:1rem}
+.empresa-header .muted-info{color:var(--muted); font-size:.78rem}
+.empresa-header .totais{display:flex; gap:16px; font-size:.82rem}
+.empresa-header .totais span strong{display:block; font-size:.95rem}
+.empresa-conteudo{padding:12px; background:var(--bg)}
 .nf-detail-row td{background:var(--panel2); padding:0}
 .nf-detail-inner{padding:12px 16px}
 .nf-detail-inner table{min-width:0}
@@ -476,74 +487,103 @@ document.getElementById('btn-salvar-multi').addEventListener('click', async ()=>
 });
 
 // ---- Saldos agrupados por empenho ----
+function renderCardNE(ne, itens){
+  const first = itens[0];
+  const totalValor = itens.reduce((s,e)=>s+e.valorTotal,0);
+  const totalSaldo = itens.reduce((s,e)=>s+e.saldoValor,0);
+
+  const linhas = itens.map(e=>{
+    let statusHtml;
+    if(e.saldoQtd<=0) statusHtml = `<span class="pill off">Esgotado</span>`;
+    else if(e.saldoQtd < e.qtd*0.2) statusHtml = `<span class="pill warn">Baixo</span>`;
+    else statusHtml = `<span class="pill ok">Disponível</span>`;
+    const saldoClass = e.saldoQtd<=0 ? 'saldo-zero' : (e.saldoQtd < e.qtd*0.2 ? 'saldo-baixo' : '');
+    return `<tr>
+      <td>${e.item}</td><td>${e.uf||'-'}</td>
+      <td>${fmtMoney(e.vunit)}</td><td>${e.qtd}</td><td>${fmtMoney(e.valorTotal)}</td>
+      <td class="${saldoClass}">${e.saldoQtd}</td><td class="${saldoClass}">${fmtMoney(e.saldoValor)}</td>
+      <td>${statusHtml}</td>
+      <td><button class="danger" onclick="removerEmpenho('${e.id}')">Excluir</button></td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="grupo-empenho">
+    <div class="grupo-header">
+      <div class="info">
+        <span><b>NE:</b> ${ne}</span>
+        <span><b>Pregão:</b> ${first.pregao||'-'}</span>
+        <span><b>SOLEMP:</b> ${first.solemp||'-'}</span>
+        <span><b>Vigência:</b> ${first.vigencia||'-'}</span>
+      </div>
+      <div class="totais">
+        <span>Vlr. total<strong>${fmtMoney(totalValor)}</strong></span>
+        <span>Saldo total<strong>${fmtMoney(totalSaldo)}</strong></span>
+        <span>Itens<strong>${itens.length}</strong></span>
+      </div>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr>
+          <th>Item</th><th>UF</th><th>Vlr. unit.</th><th>Qtd.</th><th>Vlr. total</th>
+          <th>Saldo qtd.</th><th>Saldo R$</th><th>Status</th><th></th>
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
 function renderSaldos(){
   const container = document.getElementById('saldos-container');
   const q = document.getElementById('busca-saldo').value.toLowerCase();
 
-  const grupos = {};
-  const ordem = [];
+  // agrupa primeiro por empresa, depois por número de empenho (NE) dentro de cada empresa
+  const porEmpresa = {};
+  const ordemEmpresas = [];
   empenhos.forEach(e=>{
-    if(!grupos[e.numero]){ grupos[e.numero] = []; ordem.push(e.numero); }
-    grupos[e.numero].push(e);
+    const nomeEmpresa = e.empresa || '(sem empresa)';
+    if(!porEmpresa[nomeEmpresa]){ porEmpresa[nomeEmpresa] = {}; ordemEmpresas.push(nomeEmpresa); }
+    if(!porEmpresa[nomeEmpresa][e.numero]) porEmpresa[nomeEmpresa][e.numero] = [];
+    porEmpresa[nomeEmpresa][e.numero].push(e);
   });
 
-  // filtra: mantém o empenho inteiro se ele ou algum item bater na busca
-  const numerosFiltrados = ordem.filter(ne=>{
+  const empresasFiltradas = ordemEmpresas.filter(nomeEmpresa=>{
     if(!q) return true;
-    if(ne.toLowerCase().includes(q)) return true;
-    return grupos[ne].some(e => e.empresa.toLowerCase().includes(q) || e.item.toLowerCase().includes(q) || (e.pregao||'').toLowerCase().includes(q));
+    if(nomeEmpresa.toLowerCase().includes(q)) return true;
+    return Object.entries(porEmpresa[nomeEmpresa]).some(([ne,itens])=>
+      ne.toLowerCase().includes(q) || itens.some(e => e.item.toLowerCase().includes(q) || (e.pregao||'').toLowerCase().includes(q))
+    );
   });
 
-  if(numerosFiltrados.length===0){
+  if(empresasFiltradas.length===0){
     container.innerHTML = `<div class="empty">Nenhum item de empenho cadastrado ainda.</div>`;
     return;
   }
 
-  container.innerHTML = numerosFiltrados.map(ne=>{
-    const itens = grupos[ne];
-    const first = itens[0];
-    const totalValor = itens.reduce((s,e)=>s+e.valorTotal,0);
-    const totalSaldo = itens.reduce((s,e)=>s+e.saldoValor,0);
+  container.innerHTML = empresasFiltradas.map((nomeEmpresa, idxEmpresa)=>{
+    const grupoNEs = porEmpresa[nomeEmpresa];
+    const numerosNE = Object.keys(grupoNEs);
+    const todosItens = numerosNE.flatMap(ne=>grupoNEs[ne]);
+    const totalValorEmpresa = todosItens.reduce((s,e)=>s+e.valorTotal,0);
+    const totalSaldoEmpresa = todosItens.reduce((s,e)=>s+e.saldoValor,0);
+    const containerId = 'empresa-grupo-'+idxEmpresa;
+    const abrirPorBusca = q.length>0;
 
-    const linhas = itens.map(e=>{
-      let statusHtml;
-      if(e.saldoQtd<=0) statusHtml = `<span class="pill off">Esgotado</span>`;
-      else if(e.saldoQtd < e.qtd*0.2) statusHtml = `<span class="pill warn">Baixo</span>`;
-      else statusHtml = `<span class="pill ok">Disponível</span>`;
-      const saldoClass = e.saldoQtd<=0 ? 'saldo-zero' : (e.saldoQtd < e.qtd*0.2 ? 'saldo-baixo' : '');
-      return `<tr>
-        <td>${e.item}</td><td>${e.uf||'-'}</td>
-        <td>${fmtMoney(e.vunit)}</td><td>${e.qtd}</td><td>${fmtMoney(e.valorTotal)}</td>
-        <td class="${saldoClass}">${e.saldoQtd}</td><td class="${saldoClass}">${fmtMoney(e.saldoValor)}</td>
-        <td>${statusHtml}</td>
-        <td><button class="danger" onclick="removerEmpenho('${e.id}')">Excluir</button></td>
-      </tr>`;
-    }).join('');
+    const cardsNE = numerosNE.map(ne=>renderCardNE(ne, grupoNEs[ne])).join('');
 
-    return `<div class="grupo-empenho">
-      <div class="grupo-header">
+    return `<div class="grupo-empresa">
+      <div class="empresa-header" onclick="document.getElementById('${containerId}').classList.toggle('hidden'); this.querySelector('.seta').classList.toggle('aberta')">
         <div class="info">
-          <span><b>NE:</b> ${ne}</span>
-          <span><b>Pregão:</b> ${first.pregao||'-'}</span>
-          <span><b>Empresa:</b> ${first.empresa}</span>
-          <span><b>SOLEMP:</b> ${first.solemp||'-'}</span>
-          <span><b>Vigência:</b> ${first.vigencia||'-'}</span>
+          <span class="seta ${abrirPorBusca?'aberta':''}">▶</span>
+          <span class="empresa-nome">${nomeEmpresa}</span>
+          <span class="muted-info">${numerosNE.length} empenho(s)</span>
         </div>
         <div class="totais">
-          <span>Vlr. total<strong>${fmtMoney(totalValor)}</strong></span>
-          <span>Saldo total<strong>${fmtMoney(totalSaldo)}</strong></span>
-          <span>Itens<strong>${itens.length}</strong></span>
+          <span>Vlr. total<strong>${fmtMoney(totalValorEmpresa)}</strong></span>
+          <span>Saldo total<strong>${fmtMoney(totalSaldoEmpresa)}</strong></span>
         </div>
       </div>
-      <div class="tablewrap">
-        <table>
-          <thead><tr>
-            <th>Item</th><th>UF</th><th>Vlr. unit.</th><th>Qtd.</th><th>Vlr. total</th>
-            <th>Saldo qtd.</th><th>Saldo R$</th><th>Status</th><th></th>
-          </tr></thead>
-          <tbody>${linhas}</tbody>
-        </table>
-      </div>
+      <div class="empresa-conteudo ${abrirPorBusca?'':'hidden'}" id="${containerId}">${cardsNE}</div>
     </div>`;
   }).join('');
 }

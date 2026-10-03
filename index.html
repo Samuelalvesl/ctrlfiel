@@ -88,7 +88,7 @@ tr:last-child td{border-bottom:none}
 .summary{display:flex; gap:16px; flex-wrap:wrap; margin-bottom:12px}
 .summary div{background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:10px 14px; font-size:.8rem}
 .summary strong{display:block; font-size:1.1rem; margin-top:2px}
-.hidden{display:none}
+.hidden{display:none !important}
 .login-wrap{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px}
 .login-card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:28px; width:100%; max-width:380px}
 .login-card h1{font-size:1.2rem; margin:0 0 4px}
@@ -293,17 +293,14 @@ function mostrarLogin(){
   document.getElementById('app-wrap').classList.add('hidden');
 }
 async function mostrarApp(user){
-  console.log('[DEBUG] mostrarApp iniciado para', user.email);
   usuarioAtual = user;
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app-wrap').classList.remove('hidden');
   document.getElementById('user-email').textContent = user.email;
   try{
-    console.log('[DEBUG] carregando dados do Firestore...');
     await carregarDados();
-    console.log('[DEBUG] dados carregados:', empenhos.length, 'empenhos,', notasFiscais.length, 'notas fiscais');
   }catch(err){
-    console.error('[DEBUG] erro ao carregar dados:', err.code, err.message, err);
+    console.error('Erro ao carregar dados:', err.code, err.message);
   }
   renderSaldos(); renderSelectNE(); renderHistorico();
 }
@@ -313,21 +310,15 @@ function loginMsg(texto, ok){
   msg.textContent = texto;
 }
 document.getElementById('btn-entrar').addEventListener('click', async ()=>{
-  console.log('[DEBUG] botão Entrar clicado');
   if(!auth){ loginMsg('O sistema não inicializou corretamente. Recarregue a página.', false); return; }
   const email = document.getElementById('login-email').value.trim();
   const senha = document.getElementById('login-senha').value;
-  console.log('[DEBUG] email:', email, '| senha length:', senha.length);
   if(!email || !senha){ loginMsg('Preencha email e senha.', false); return; }
   loginMsg('Entrando...', true);
   try{
-    console.log('[DEBUG] chamando signInWithEmailAndPassword...');
     const cred = await signInWithEmailAndPassword(auth, email, senha);
-    console.log('[DEBUG] login OK, uid:', cred.user.uid);
     await mostrarApp(cred.user);
-    console.log('[DEBUG] mostrarApp concluído');
   }catch(err){
-    console.error('[DEBUG] erro no login:', err.code, err.message, err);
     loginMsg('Erro ao entrar: '+traduzErroFirebase(err), false);
   }
 });
@@ -339,7 +330,7 @@ document.getElementById('btn-criar-conta').addEventListener('click', async ()=>{
   if(senha.length<6){ loginMsg('A senha deve ter ao menos 6 caracteres.', false); return; }
   try{
     const cred = await createUserWithEmailAndPassword(auth, email, senha);
-    mostrarApp(cred.user);
+    await mostrarApp(cred.user);
   }catch(err){ loginMsg('Erro ao criar conta: '+traduzErroFirebase(err), false); }
 });
 document.getElementById('btn-sair').addEventListener('click', async ()=>{

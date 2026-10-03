@@ -137,6 +137,7 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
   <button data-tab="saldos">Saldos de Empenho</button>
   <button data-tab="baixa">Registrar Nota Fiscal</button>
   <button data-tab="historico">Histórico de NFs</button>
+  <button data-tab="config">Configurações</button>
 </nav>
 
 <main>
@@ -149,7 +150,7 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
         <div class="field"><label>Pregão / Processo</label><input id="m-pregao" placeholder="Ex: 5003/2024"></div>
         <div class="field"><label>Vigência</label><input id="m-vigencia" type="date"></div>
         <div class="field"><label>Número da nota de empenho (NE)</label><input id="m-numero" placeholder="Ex: 2025NE1"></div>
-        <div class="field"><label>Empresa favorecida</label><input id="m-empresa" placeholder="Razão social"></div>
+        <div class="field"><label>Empresa favorecida</label><input id="m-empresa" placeholder="Razão social" list="lista-empresas"></div>
         <div class="field"><label>SOLEMP</label><input id="m-solemp" placeholder="Ex: SOL-003"></div>
       </div>
       <div class="tablewrap" style="margin-top:16px">
@@ -159,6 +160,7 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
         </table>
       </div>
       <datalist id="unidades"><option>KG</option><option>UN</option><option>PC</option><option>LT</option><option>CX</option><option>PCT</option></datalist>
+      <datalist id="lista-empresas"></datalist>
       <div class="actions">
         <button id="btn-add-linha" type="button">+ Adicionar item</button>
         <button class="primary" id="btn-salvar-multi">Salvar todos os itens</button>
@@ -209,6 +211,35 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
           <thead><tr>
             <th>NF nº</th><th>Data</th><th>Nota de empenho</th><th>Valor total da NF</th><th></th>
           </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-config" class="tab hidden">
+    <div class="card">
+      <h2 id="empresa-form-titulo">Cadastro de Empresas</h2>
+      <input type="hidden" id="empresa-editando-id">
+      <div class="grid">
+        <div class="field"><label>Razão Social</label><input id="emp-nome" placeholder="Nome da empresa"></div>
+        <div class="field"><label>CNPJ</label><input id="emp-cnpj" placeholder="00.000.000/0000-00"></div>
+        <div class="field"><label>Telefone</label><input id="emp-telefone" placeholder="(00) 00000-0000"></div>
+        <div class="field"><label>Endereço</label><input id="emp-endereco" placeholder="Endereço completo"></div>
+        <div class="field"><label>Email</label><input id="emp-email" type="email" placeholder="contato@empresa.com"></div>
+      </div>
+      <div class="actions">
+        <button class="primary" id="btn-salvar-empresa">Cadastrar empresa</button>
+        <button id="btn-cancelar-edicao-empresa" type="button" class="hidden">Cancelar edição</button>
+        <span id="msg-empresa"></span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Empresas cadastradas</h2>
+      <input class="search" id="busca-empresa" placeholder="Buscar por razão social ou CNPJ...">
+      <div class="tablewrap">
+        <table id="tbl-empresas">
+          <thead><tr><th>Razão Social</th><th>CNPJ</th><th>Telefone</th><th>Endereço</th><th>Email</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -276,15 +307,23 @@ function nfFromDoc(d){
     item:r.item, qtd:Number(r.quantidade), valorBaixado:Number(r.valorBaixado),
     saldoAposQtd:Number(r.saldoQtdApos), saldoAposValor:Number(r.saldoValorApos) };
 }
+function empresaFromDoc(d){
+  const r = d.data();
+  return { id:d.id, nome:r.nome||'', cnpj:r.cnpj||'', telefone:r.telefone||'', endereco:r.endereco||'', email:r.email||'' };
+}
+
+let empresas = [];
 
 async function carregarDados(){
   const uidAtual = usuarioAtual.uid;
-  const [empSnap, nfSnap] = await Promise.all([
+  const [empSnap, nfSnap, empresaSnap] = await Promise.all([
     getDocs(query(collection(db,'empenhos'), where('userId','==',uidAtual))),
-    getDocs(query(collection(db,'notasFiscais'), where('userId','==',uidAtual)))
+    getDocs(query(collection(db,'notasFiscais'), where('userId','==',uidAtual))),
+    getDocs(query(collection(db,'empresas'), where('userId','==',uidAtual)))
   ]);
   empenhos = empSnap.docs.map(empenhoFromDoc);
   notasFiscais = nfSnap.docs.map(nfFromDoc);
+  empresas = empresaSnap.docs.map(empresaFromDoc);
 }
 
 // ---- Login / Autenticação ----
@@ -302,7 +341,7 @@ async function mostrarApp(user){
   }catch(err){
     console.error('Erro ao carregar dados:', err.code, err.message);
   }
-  renderSaldos(); renderSelectNE(); renderHistorico();
+  renderSaldos(); renderSelectNE(); renderHistorico(); renderEmpresas();
 }
 function loginMsg(texto, ok){
   const msg = document.getElementById('login-msg');
@@ -364,6 +403,7 @@ document.querySelectorAll('nav button').forEach(btn=>{
     if(btn.dataset.tab==='saldos') renderSaldos();
     if(btn.dataset.tab==='baixa') renderSelectNE();
     if(btn.dataset.tab==='historico') renderHistorico();
+    if(btn.dataset.tab==='config') renderEmpresas();
   });
 });
 
@@ -606,6 +646,92 @@ document.getElementById('btn-baixar').addEventListener('click', async ()=>{
   document.getElementById('nf-itens-wrap').classList.add('hidden');
   document.querySelector('#tbl-nf-itens tbody').innerHTML='';
 });
+
+// ---- Configurações: Cadastro de Empresas ----
+function renderEmpresas(){
+  // atualiza o datalist usado no cadastro de empenho
+  const dl = document.getElementById('lista-empresas');
+  dl.innerHTML = empresas.map(e=>`<option value="${e.nome}">`).join('');
+
+  const tbody = document.querySelector('#tbl-empresas tbody');
+  const q = (document.getElementById('busca-empresa').value||'').toLowerCase();
+  const rows = empresas.filter(e => !q || e.nome.toLowerCase().includes(q) || (e.cnpj||'').toLowerCase().includes(q));
+  if(rows.length===0){
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">Nenhuma empresa cadastrada ainda.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(e=>`
+    <tr>
+      <td>${e.nome}</td><td>${e.cnpj||'-'}</td><td>${e.telefone||'-'}</td><td>${e.endereco||'-'}</td><td>${e.email||'-'}</td>
+      <td style="display:flex; gap:8px">
+        <button class="btn-link" onclick="editarEmpresa('${e.id}')">Editar</button>
+        <button class="danger" onclick="removerEmpresa('${e.id}')">Excluir</button>
+      </td>
+    </tr>`).join('');
+}
+document.getElementById('busca-empresa').addEventListener('input', renderEmpresas);
+
+document.getElementById('btn-salvar-empresa').addEventListener('click', async ()=>{
+  const msg = document.getElementById('msg-empresa');
+  const idEditando = document.getElementById('empresa-editando-id').value;
+  const nome = document.getElementById('emp-nome').value.trim();
+  const cnpj = document.getElementById('emp-cnpj').value.trim();
+  const telefone = document.getElementById('emp-telefone').value.trim();
+  const endereco = document.getElementById('emp-endereco').value.trim();
+  const email = document.getElementById('emp-email').value.trim();
+
+  if(!nome){ msg.className='msg err'; msg.textContent='Informe ao menos a Razão Social.'; return; }
+
+  const dadosEmpresa = { nome, cnpj, telefone, endereco, email };
+
+  try{
+    if(idEditando){
+      await updateDoc(doc(db,'empresas',idEditando), dadosEmpresa);
+      const idx = empresas.findIndex(e=>e.id===idEditando);
+      if(idx>-1) empresas[idx] = { id:idEditando, ...dadosEmpresa };
+      msg.className='msg ok'; msg.textContent='Empresa atualizada com sucesso.';
+    } else {
+      const ref = await addDoc(collection(db,'empresas'), { ...dadosEmpresa, userId: usuarioAtual.uid, createdAt: Date.now() });
+      empresas.push({ id:ref.id, ...dadosEmpresa });
+      msg.className='msg ok'; msg.textContent='Empresa cadastrada com sucesso.';
+    }
+  }catch(err){ msg.className='msg err'; msg.textContent='Erro ao salvar: '+err.message; return; }
+
+  cancelarEdicaoEmpresa();
+  renderEmpresas();
+});
+
+window.editarEmpresa = function(id){
+  const e = empresas.find(x=>x.id===id);
+  if(!e) return;
+  document.getElementById('empresa-editando-id').value = e.id;
+  document.getElementById('emp-nome').value = e.nome;
+  document.getElementById('emp-cnpj').value = e.cnpj;
+  document.getElementById('emp-telefone').value = e.telefone;
+  document.getElementById('emp-endereco').value = e.endereco;
+  document.getElementById('emp-email').value = e.email;
+  document.getElementById('empresa-form-titulo').textContent = 'Editando empresa';
+  document.getElementById('btn-salvar-empresa').textContent = 'Salvar alterações';
+  document.getElementById('btn-cancelar-edicao-empresa').classList.remove('hidden');
+  document.getElementById('emp-nome').scrollIntoView({behavior:'smooth', block:'center'});
+};
+
+function cancelarEdicaoEmpresa(){
+  document.getElementById('empresa-editando-id').value = '';
+  ['emp-nome','emp-cnpj','emp-telefone','emp-endereco','emp-email'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('empresa-form-titulo').textContent = 'Cadastro de Empresas';
+  document.getElementById('btn-salvar-empresa').textContent = 'Cadastrar empresa';
+  document.getElementById('btn-cancelar-edicao-empresa').classList.add('hidden');
+}
+document.getElementById('btn-cancelar-edicao-empresa').addEventListener('click', cancelarEdicaoEmpresa);
+
+window.removerEmpresa = async function(id){
+  if(!confirm('Excluir esta empresa? Empenhos e pedidos já criados não serão afetados.')) return;
+  try{ await deleteDoc(doc(db,'empresas',id)); }
+  catch(err){ alert('Erro ao excluir: '+err.message); return; }
+  empresas = empresas.filter(e=>e.id!==id);
+  renderEmpresas();
+};
 
 // ---- Histórico de NFs ----
 function renderHistorico(){

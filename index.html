@@ -216,15 +216,9 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
     <div class="card">
       <h2>Histórico de notas fiscais</h2>
       <div class="summary" id="resumo-nf"></div>
+      <input class="search" id="busca-historico" placeholder="Buscar por empresa, número da NF ou número do empenho...">
       <div class="actions" style="margin-top:0; margin-bottom:12px"><button class="primary" id="btn-export-nf" style="background:var(--panel2); color:var(--text); border:1px solid var(--line)">Exportar CSV</button></div>
-      <div class="tablewrap">
-        <table id="tbl-nf">
-          <thead><tr>
-            <th>NF nº</th><th>Data</th><th>Nota de empenho</th><th>Valor total da NF</th><th></th>
-          </tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
+      <div id="historico-container"></div>
     </div>
   </section>
 
@@ -598,13 +592,19 @@ window.removerEmpenho = async function(id){
 };
 
 // ---- Registrar nota fiscal (por empenho, com todos os itens) ----
+function empresaDoNE(ne){
+  const item = empenhos.find(e=>e.numero===ne);
+  return item ? (item.empresa || '(sem empresa)') : '';
+}
+
 function renderSelectNE(){
   const sel = document.getElementById('nf-ne');
   const nes = [...new Set(empenhos.map(e=>e.numero))];
   if(nes.length===0){
     sel.innerHTML = `<option value="">Nenhum empenho cadastrado</option>`;
   } else {
-    sel.innerHTML = `<option value="">Selecione o empenho...</option>` + nes.map(ne=>`<option value="${ne}">${ne}</option>`).join('');
+    sel.innerHTML = `<option value="">Selecione o empenho...</option>` +
+      nes.map(ne=>`<option value="${ne}">Empenho nº ${ne} — ${empresaDoNE(ne)}</option>`).join('');
   }
   document.getElementById('nf-itens-wrap').classList.add('hidden');
   document.querySelector('#tbl-nf-itens tbody').innerHTML='';
@@ -773,67 +773,119 @@ window.removerEmpresa = async function(id){
   renderEmpresas();
 };
 
-// ---- Histórico de NFs ----
+// ---- Histórico de NFs (agrupado por empresa) ----
 function renderHistorico(){
-  const tbody = document.querySelector('#tbl-nf tbody');
+  const container = document.getElementById('historico-container');
   const resumo = document.getElementById('resumo-nf');
+  const q = (document.getElementById('busca-historico').value||'').toLowerCase();
+
   if(notasFiscais.length===0){
-    tbody.innerHTML = `<tr><td colspan="5" class="empty">Nenhuma nota fiscal registrada ainda.</td></tr>`;
+    container.innerHTML = `<div class="empty">Nenhuma nota fiscal registrada ainda.</div>`;
     resumo.innerHTML='';
     return;
   }
 
   // agrupa por número da NF + empenho vinculado
-  const grupos = {};
-  const ordem = [];
+  const gruposNF = {};
+  const ordemNF = [];
   notasFiscais.forEach(n=>{
     const chave = n.numeroNF + '||' + n.numeroEmpenho;
-    if(!grupos[chave]){ grupos[chave] = { numeroNF:n.numeroNF, numeroEmpenho:n.numeroEmpenho, data:n.data, itens:[] }; ordem.push(chave); }
-    grupos[chave].itens.push(n);
+    if(!gruposNF[chave]){
+      gruposNF[chave] = { numeroNF:n.numeroNF, numeroEmpenho:n.numeroEmpenho, data:n.data,
+        empresa: empresaDoNE(n.numeroEmpenho) || '(sem empresa)', itens:[] };
+      ordemNF.push(chave);
+    }
+    gruposNF[chave].itens.push(n);
   });
 
-  const totalNFs = ordem.length;
+  const totalNFs = ordemNF.length;
   const totalValor = notasFiscais.reduce((s,n)=>s+n.valorBaixado,0);
   resumo.innerHTML = `
     <div>Notas fiscais registradas<strong>${totalNFs}</strong></div>
     <div>Valor total baixado<strong>${fmtMoney(totalValor)}</strong></div>
   `;
 
-  const chavesOrdenadas = ordem.sort((a,b)=> (grupos[b].data||'').localeCompare(grupos[a].data||''));
+  // agora agrupa os grupos de NF por empresa
+  const porEmpresa = {};
+  const ordemEmpresas = [];
+  ordemNF.forEach(chave=>{
+    const g = gruposNF[chave];
+    if(!porEmpresa[g.empresa]){ porEmpresa[g.empresa] = []; ordemEmpresas.push(g.empresa); }
+    porEmpresa[g.empresa].push(g);
+  });
 
-  tbody.innerHTML = chavesOrdenadas.map((chave,idx)=>{
-    const g = grupos[chave];
-    const valorTotalNF = g.itens.reduce((s,n)=>s+n.valorBaixado,0);
-    const detailId = 'nf-det-'+idx;
-    const linhasItens = g.itens.map(n=>`
+  const empresasFiltradas = ordemEmpresas.filter(nomeEmpresa=>{
+    if(!q) return true;
+    if(nomeEmpresa.toLowerCase().includes(q)) return true;
+    return porEmpresa[nomeEmpresa].some(g => g.numeroNF.toLowerCase().includes(q) || g.numeroEmpenho.toLowerCase().includes(q));
+  });
+
+  if(empresasFiltradas.length===0){
+    container.innerHTML = `<div class="empty">Nenhum resultado para essa busca.</div>`;
+    return;
+  }
+
+  let contadorDetalhe = 0;
+  container.innerHTML = empresasFiltradas.map((nomeEmpresa, idxEmpresa)=>{
+    const gruposDaEmpresa = porEmpresa[nomeEmpresa].slice().sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+    const totalEmpresa = gruposDaEmpresa.reduce((s,g)=>s+g.itens.reduce((s2,n)=>s2+n.valorBaixado,0),0);
+    const containerId = 'hist-empresa-'+idxEmpresa;
+    const abrirPorBusca = q.length>0;
+
+    const linhasNF = gruposDaEmpresa.map(g=>{
+      const valorTotalNF = g.itens.reduce((s,n)=>s+n.valorBaixado,0);
+      const detailId = 'nf-det-'+(contadorDetalhe++);
+      const linhasItens = g.itens.map(n=>`
+        <tr>
+          <td>${n.item}</td><td>${n.qtd}</td><td>${fmtMoney(n.valorBaixado)}</td>
+          <td>${n.saldoAposQtd} un. / ${fmtMoney(n.saldoAposValor)}</td>
+          <td><button class="danger" onclick="removerItemNF('${n.id}')">Excluir item</button></td>
+        </tr>`).join('');
+      return `
       <tr>
-        <td>${n.item}</td><td>${n.qtd}</td><td>${fmtMoney(n.valorBaixado)}</td>
-        <td>${n.saldoAposQtd} un. / ${fmtMoney(n.saldoAposValor)}</td>
-        <td><button class="danger" onclick="removerItemNF('${n.id}')">Excluir item</button></td>
-      </tr>`).join('');
-
-    return `
-    <tr>
-      <td>${g.numeroNF}</td><td>${g.data}</td><td>${g.numeroEmpenho}</td><td>${fmtMoney(valorTotalNF)}</td>
-      <td style="display:flex; gap:8px">
-        <button class="btn-link" onclick="document.getElementById('${detailId}').classList.toggle('hidden')">Detalhar</button>
-        <button class="danger" onclick="removerNF('${g.numeroNF.replace(/'/g,"\\'")}','${g.numeroEmpenho.replace(/'/g,"\\'")}')">Excluir NF</button>
-      </td>
-    </tr>
-    <tr class="nf-detail-row hidden" id="${detailId}">
-      <td colspan="5">
-        <div class="nf-detail-inner">
-          <div class="tablewrap">
-            <table>
-              <thead><tr><th>Item</th><th>Qtd. baixada</th><th>Vlr. baixado</th><th>Saldo após</th><th></th></tr></thead>
-              <tbody>${linhasItens}</tbody>
-            </table>
+        <td>${g.numeroNF}</td><td>${g.data}</td><td>${g.numeroEmpenho}</td><td>${fmtMoney(valorTotalNF)}</td>
+        <td style="display:flex; gap:8px">
+          <button class="btn-link" onclick="document.getElementById('${detailId}').classList.toggle('hidden')">Detalhar</button>
+          <button class="danger" onclick="removerNF('${g.numeroNF.replace(/'/g,"\\'")}','${g.numeroEmpenho.replace(/'/g,"\\'")}')">Excluir NF</button>
+        </td>
+      </tr>
+      <tr class="nf-detail-row hidden" id="${detailId}">
+        <td colspan="5">
+          <div class="nf-detail-inner">
+            <div class="tablewrap">
+              <table>
+                <thead><tr><th>Item</th><th>Qtd. baixada</th><th>Vlr. baixado</th><th>Saldo após</th><th></th></tr></thead>
+                <tbody>${linhasItens}</tbody>
+              </table>
+            </div>
           </div>
+        </td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="grupo-empresa">
+      <div class="empresa-header" onclick="document.getElementById('${containerId}').classList.toggle('hidden'); this.querySelector('.seta').classList.toggle('aberta')">
+        <div class="info">
+          <span class="seta ${abrirPorBusca?'aberta':''}">▶</span>
+          <span class="empresa-nome">${nomeEmpresa}</span>
+          <span class="muted-info">${gruposDaEmpresa.length} NF(s)</span>
         </div>
-      </td>
-    </tr>`;
+        <div class="totais">
+          <span>Valor total baixado<strong>${fmtMoney(totalEmpresa)}</strong></span>
+        </div>
+      </div>
+      <div class="empresa-conteudo ${abrirPorBusca?'':'hidden'}" id="${containerId}">
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>NF nº</th><th>Data</th><th>Nota de empenho</th><th>Valor total da NF</th><th></th></tr></thead>
+            <tbody>${linhasNF}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
   }).join('');
 }
+document.getElementById('busca-historico').addEventListener('input', renderHistorico);
 
 window.removerItemNF = async function(id){
   const nf = notasFiscais.find(n=>n.id===id);

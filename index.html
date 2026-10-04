@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Controle de Empenhos e Estoque</title>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf-autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.js"></script>
 <style>
 :root{
   --bg:#0f1720; --panel:#16212c; --panel2:#1c2a37; --line:#2a3b49;
@@ -1306,12 +1306,16 @@ document.getElementById('btn-gerar-pedido').addEventListener('click', async ()=>
     pedidos.push({ id:ref.id, ...pedidoData });
   }catch(err){ msg.className='msg err'; msg.textContent='Erro ao salvar pedido: '+err.message; return; }
 
-  const doc = gerarPDFPedido({ ...pedidoData,
-    enderecoInstituicao:'BR 158 Nº 12174 SALA 05 PLANALTO – PATO BRANCO -PR',
-    cnpjInstituicao:'41.272.326/0001-55', telefoneInstituicao:'(46) 3225-1991' });
-  window.open(doc.output('bloburl'), '_blank');
-
-  msg.className='msg ok'; msg.textContent=`Pedido ${numeroPedido} gerado com sucesso.`;
+  try{
+    const docPdf = gerarPDFPedido({ ...pedidoData,
+      enderecoInstituicao:'BR 158 Nº 12174 SALA 05 PLANALTO – PATO BRANCO -PR',
+      cnpjInstituicao:'41.272.326/0001-55', telefoneInstituicao:'(46) 3225-1991' });
+    window.open(docPdf.output('bloburl'), '_blank');
+    msg.className='msg ok'; msg.textContent=`Pedido ${numeroPedido} gerado com sucesso.`;
+  }catch(err){
+    console.error('Erro ao gerar PDF:', err);
+    msg.className='msg err'; msg.textContent='Pedido salvo, mas houve erro ao gerar o PDF: '+err.message;
+  }
   renderPedidos();
 });
 
@@ -1337,10 +1341,15 @@ document.getElementById('busca-pedido').addEventListener('input', renderPedidos)
 window.verPDFPedido = function(id){
   const p = pedidos.find(x=>x.id===id);
   if(!p) return;
-  const doc = gerarPDFPedido({ ...p,
-    enderecoInstituicao:'BR 158 Nº 12174 SALA 05 PLANALTO – PATO BRANCO -PR',
-    cnpjInstituicao:'41.272.326/0001-55', telefoneInstituicao:'(46) 3225-1991' });
-  window.open(doc.output('bloburl'), '_blank');
+  try{
+    const docPdf = gerarPDFPedido({ ...p,
+      enderecoInstituicao:'BR 158 Nº 12174 SALA 05 PLANALTO – PATO BRANCO -PR',
+      cnpjInstituicao:'41.272.326/0001-55', telefoneInstituicao:'(46) 3225-1991' });
+    window.open(docPdf.output('bloburl'), '_blank');
+  }catch(err){
+    console.error('Erro ao gerar PDF:', err);
+    alert('Erro ao gerar o PDF: '+err.message);
+  }
 };
 
 window.removerPedido = async function(id){

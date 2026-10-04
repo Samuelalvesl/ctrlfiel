@@ -237,16 +237,13 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
 
       <div id="ped-empresa-info" class="hidden" style="margin-top:14px; padding:12px; background:var(--panel2); border-radius:8px; font-size:.85rem; color:var(--muted)"></div>
 
-      <div id="ped-empenho-wrap" class="hidden" style="margin-top:16px">
-        <div class="field"><label>Empenho</label><select id="ped-empenho"></select></div>
-        <div id="ped-itens-wrap" class="hidden" style="margin-top:12px">
-          <label>Itens do empenho — marque os itens e informe a quantidade solicitada</label>
-          <div class="tablewrap" style="margin-top:8px">
-            <table id="tbl-ped-itens">
-              <thead><tr><th></th><th>Item</th><th>UF</th><th>Vlr. unit.</th><th>Saldo</th><th>Qtd. solicitada</th></tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
+      <div id="ped-itens-wrap" class="hidden" style="margin-top:16px">
+        <label>Itens disponíveis (de todos os empenhos dessa empresa) — marque os itens e informe a quantidade solicitada</label>
+        <div class="tablewrap" style="margin-top:8px">
+          <table id="tbl-ped-itens">
+            <thead><tr><th></th><th>NE</th><th>Item</th><th>UF</th><th>Vlr. unit.</th><th>Saldo</th><th>Qtd. solicitada</th></tr></thead>
+            <tbody></tbody>
+          </table>
         </div>
       </div>
 
@@ -1168,43 +1165,32 @@ function popularSelectAssinaturas(){
 document.getElementById('ped-empresa').addEventListener('change', ()=>{
   const id = document.getElementById('ped-empresa').value;
   const info = document.getElementById('ped-empresa-info');
-  const wrapEmpenho = document.getElementById('ped-empenho-wrap');
   const wrapItens = document.getElementById('ped-itens-wrap');
   const wrapDetalhes = document.getElementById('ped-detalhes-wrap');
-  wrapItens.classList.add('hidden');
-  wrapDetalhes.classList.add('hidden');
+  const tbody = document.querySelector('#tbl-ped-itens tbody');
 
   const e = empresas.find(x=>x.id===id);
-  if(!e){ info.classList.add('hidden'); wrapEmpenho.classList.add('hidden'); return; }
+  if(!e){
+    info.classList.add('hidden'); wrapItens.classList.add('hidden'); wrapDetalhes.classList.add('hidden');
+    return;
+  }
 
   info.innerHTML = `<b>${e.nome}</b> — CNPJ: ${e.cnpj||'-'} — Tel: ${e.telefone||'-'} — Email: ${e.email||'-'}<br>Endereço: ${e.endereco||'-'}`;
   info.classList.remove('hidden');
 
-  const nesDaEmpresa = [...new Set(empenhos.filter(x=>x.empresa===e.nome).map(x=>x.numero))];
-  const selEmp = document.getElementById('ped-empenho');
-  if(nesDaEmpresa.length===0){
-    selEmp.innerHTML = `<option value="">Nenhum empenho cadastrado para essa empresa</option>`;
+  // todos os itens de todos os empenhos dessa empresa, de uma vez, com saldo disponível
+  const itensDaEmpresa = empenhos.filter(x=>x.empresa===e.nome && x.saldoQtd>0);
+  if(itensDaEmpresa.length===0){
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">Nenhum empenho com saldo disponível para essa empresa.</td></tr>`;
   } else {
-    selEmp.innerHTML = `<option value="">Selecione o empenho...</option>` + nesDaEmpresa.map(ne=>`<option value="${ne}">${ne}</option>`).join('');
+    tbody.innerHTML = itensDaEmpresa.map(x=>`
+      <tr data-id="${x.id}">
+        <td><input type="checkbox" class="ped-item-check"></td>
+        <td>${x.numero}</td><td>${x.item}</td><td>${x.uf||'-'}</td><td>${fmtMoney(x.vunit)}</td>
+        <td>${x.saldoQtd} un.</td>
+        <td><input type="number" class="ped-item-qtd" min="0" max="${x.saldoQtd}" step="1" style="width:100px" placeholder="0"></td>
+      </tr>`).join('');
   }
-  wrapEmpenho.classList.remove('hidden');
-});
-
-document.getElementById('ped-empenho').addEventListener('change', ()=>{
-  const ne = document.getElementById('ped-empenho').value;
-  const wrapItens = document.getElementById('ped-itens-wrap');
-  const wrapDetalhes = document.getElementById('ped-detalhes-wrap');
-  const tbody = document.querySelector('#tbl-ped-itens tbody');
-  if(!ne){ wrapItens.classList.add('hidden'); wrapDetalhes.classList.add('hidden'); return; }
-
-  const itens = empenhos.filter(e=>e.numero===ne);
-  tbody.innerHTML = itens.map(e=>`
-    <tr data-id="${e.id}">
-      <td><input type="checkbox" class="ped-item-check"></td>
-      <td>${e.item}</td><td>${e.uf||'-'}</td><td>${fmtMoney(e.vunit)}</td>
-      <td>${e.saldoQtd} un.</td>
-      <td><input type="number" class="ped-item-qtd" min="0" max="${e.saldoQtd}" step="1" style="width:100px" placeholder="0"></td>
-    </tr>`).join('');
   wrapItens.classList.remove('hidden');
   wrapDetalhes.classList.remove('hidden');
 });
@@ -1221,13 +1207,12 @@ function gerarPDFPedido(p){
   doc.setFontSize(11);
   doc.text('COLÉGIO NAVAL', margemEsq, y);
   doc.text(`Nº PEDIDO: ${p.numeroPedido}`, 555, y, {align:'right'}); y += 16;
-  doc.setFont('helvetica','normal');
-  doc.text(`ENDEREÇO: ${p.enderecoInstituicao}`, margemEsq, y); y += 16;
-  doc.text(`CNPJ: ${p.cnpjInstituicao}`, margemEsq, y); y += 16;
-  doc.text(`TELE/FAX: ${p.telefoneInstituicao}`, margemEsq, y);
+  doc.text(p.empresaNome, margemEsq, y);
   doc.text(`DATA EMISSÃO: ${p.dataEmissao}`, 555, y, {align:'right'}); y += 16;
-  doc.setFont('helvetica','bold');
-  doc.text(`FORNECEDOR: ${p.empresaNome}`, margemEsq, y); y += 20;
+  doc.setFont('helvetica','normal');
+  doc.text(`ENDEREÇO: ${p.empresaEndereco||'-'}`, margemEsq, y); y += 16;
+  doc.text(`CNPJ: ${p.empresaCnpj||'-'}`, margemEsq, y); y += 16;
+  doc.text(`TELE/FAX: ${p.empresaTelefone||'-'}`, margemEsq, y); y += 20;
 
   const linhasTabela = p.itens.map((it,i)=>[i+1, it.item, it.uf||'-', it.qtd, fmtMoney(it.valorUnitario), fmtMoney(it.valorTotal)]);
   doc.autoTable({
@@ -1249,7 +1234,7 @@ function gerarPDFPedido(p){
   doc.text(`Contato: procurar por: ${p.contato||'_______________________'}`, margemEsq, y); y += 18;
   doc.text(`DATA/HORA LIMITE PARA RECEBIMENTO: ${p.prazoRecebimento||'_______________________'}`, margemEsq, y); y += 50;
 
-  const colEsq = margemEsq+40, colDir = 340;
+  const colEsq = 165, colDir = 430;
   doc.setFont('helvetica','bold');
   doc.text(p.assinatura1 ? p.assinatura1.nome : '_______________________', colEsq, y, {align:'center'});
   doc.text(p.assinatura2 ? p.assinatura2.nome : '_______________________', colDir, y, {align:'center'}); y += 14;
@@ -1266,15 +1251,14 @@ document.getElementById('btn-gerar-pedido').addEventListener('click', async ()=>
   const msg = document.getElementById('msg-pedido');
   const numeroPedido = document.getElementById('ped-numero').value.trim();
   const empresaId = document.getElementById('ped-empresa').value;
-  const numeroEmpenho = document.getElementById('ped-empenho').value;
   const empresa = empresas.find(e=>e.id===empresaId);
 
   if(!numeroPedido){ msg.className='msg err'; msg.textContent='Informe o número do pedido.'; return; }
   if(!empresa){ msg.className='msg err'; msg.textContent='Selecione a empresa fornecedora.'; return; }
-  if(!numeroEmpenho){ msg.className='msg err'; msg.textContent='Selecione o empenho.'; return; }
 
   const linhas = [...document.querySelectorAll('#tbl-ped-itens tbody tr')];
   const itensSelecionados = [];
+  const nesUsados = new Set();
   linhas.forEach(tr=>{
     const marcado = tr.querySelector('.ped-item-check').checked;
     const qtd = parseInt(tr.querySelector('.ped-item-qtd').value);
@@ -1282,8 +1266,10 @@ document.getElementById('btn-gerar-pedido').addEventListener('click', async ()=>
     const e = empenhos.find(x=>x.id===tr.dataset.id);
     if(!e) return;
     itensSelecionados.push({ item:e.item, uf:e.uf, qtd, valorUnitario:e.vunit, valorTotal:qtd*e.vunit });
+    nesUsados.add(e.numero);
   });
   if(itensSelecionados.length===0){ msg.className='msg err'; msg.textContent='Marque ao menos um item e informe a quantidade.'; return; }
+  const numeroEmpenho = [...nesUsados].join(', ');
 
   const assin1 = assinaturas.find(a=>a.id===document.getElementById('ped-assin1').value) || null;
   const assin2 = assinaturas.find(a=>a.id===document.getElementById('ped-assin2').value) || null;
@@ -1307,9 +1293,7 @@ document.getElementById('btn-gerar-pedido').addEventListener('click', async ()=>
   }catch(err){ msg.className='msg err'; msg.textContent='Erro ao salvar pedido: '+err.message; return; }
 
   try{
-    const docPdf = gerarPDFPedido({ ...pedidoData,
-      enderecoInstituicao:'BR 158 Nº 12174 SALA 05 PLANALTO – PATO BRANCO -PR',
-      cnpjInstituicao:'41.272.326/0001-55', telefoneInstituicao:'(46) 3225-1991' });
+    const docPdf = gerarPDFPedido(pedidoData);
     window.open(docPdf.output('bloburl'), '_blank');
     msg.className='msg ok'; msg.textContent=`Pedido ${numeroPedido} gerado com sucesso.`;
   }catch(err){
@@ -1342,9 +1326,7 @@ window.verPDFPedido = function(id){
   const p = pedidos.find(x=>x.id===id);
   if(!p) return;
   try{
-    const docPdf = gerarPDFPedido({ ...p,
-      enderecoInstituicao:'BR 158 Nº 12174 SALA 05 PLANALTO – PATO BRANCO -PR',
-      cnpjInstituicao:'41.272.326/0001-55', telefoneInstituicao:'(46) 3225-1991' });
+    const docPdf = gerarPDFPedido(p);
     window.open(docPdf.output('bloburl'), '_blank');
   }catch(err){
     console.error('Erro ao gerar PDF:', err);

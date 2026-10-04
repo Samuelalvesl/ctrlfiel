@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Controle de Empenhos e Estoque</title>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf-autotable.min.js"></script>
 <style>
 :root{
   --bg:#0f1720; --panel:#16212c; --panel2:#1c2a37; --line:#2a3b49;
@@ -75,6 +77,8 @@ button.danger{background:transparent; color:var(--danger); border:1px solid var(
 .empresa-header .totais{display:flex; gap:16px; font-size:.82rem}
 .empresa-header .totais span strong{display:block; font-size:.95rem}
 .empresa-conteudo{padding:12px; background:var(--bg)}
+.subnav-btn{background:var(--panel); border:1px solid var(--line); color:var(--muted); padding:9px 16px; border-radius:7px; cursor:pointer; font-weight:600; font-size:.85rem}
+.subnav-btn.active{background:var(--accent); color:#fff; border-color:var(--accent)}
 .nf-detail-row td{background:var(--panel2); padding:0}
 .nf-detail-inner{padding:12px 16px}
 .nf-detail-inner table{min-width:0}
@@ -148,6 +152,7 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
   <button data-tab="saldos">Saldos de Empenho</button>
   <button data-tab="baixa">Registrar Nota Fiscal</button>
   <button data-tab="historico">Histórico de NFs</button>
+  <button data-tab="pedidos">Pedidos</button>
   <button data-tab="config">Configurações</button>
 </nav>
 
@@ -222,7 +227,63 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
     </div>
   </section>
 
+  <section id="tab-pedidos" class="tab hidden">
+    <div class="card">
+      <h2>Novo Pedido de Gêneros</h2>
+      <div class="grid">
+        <div class="field"><label>Número do Pedido</label><input id="ped-numero" placeholder="Ex: 104"></div>
+        <div class="field"><label>Empresa Fornecedora</label><select id="ped-empresa"></select></div>
+      </div>
+
+      <div id="ped-empresa-info" class="hidden" style="margin-top:14px; padding:12px; background:var(--panel2); border-radius:8px; font-size:.85rem; color:var(--muted)"></div>
+
+      <div id="ped-empenho-wrap" class="hidden" style="margin-top:16px">
+        <div class="field"><label>Empenho</label><select id="ped-empenho"></select></div>
+        <div id="ped-itens-wrap" class="hidden" style="margin-top:12px">
+          <label>Itens do empenho — marque os itens e informe a quantidade solicitada</label>
+          <div class="tablewrap" style="margin-top:8px">
+            <table id="tbl-ped-itens">
+              <thead><tr><th></th><th>Item</th><th>UF</th><th>Vlr. unit.</th><th>Saldo</th><th>Qtd. solicitada</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="ped-detalhes-wrap" class="hidden" style="margin-top:16px">
+        <div class="grid">
+          <div class="field"><label>Obs</label><input id="ped-obs" placeholder="Observações"></div>
+          <div class="field"><label>Contato (procurar por)</label><input id="ped-contato" placeholder="Nome(s) para contato"></div>
+          <div class="field"><label>Data/hora limite para recebimento</label><input id="ped-prazo" placeholder="Ex: até sexta-feira, 14h"></div>
+          <div class="field"><label>Assinatura 1</label><select id="ped-assin1"></select></div>
+          <div class="field"><label>Assinatura 2</label><select id="ped-assin2"></select></div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="btn-gerar-pedido">Gerar Pedido em PDF</button>
+          <span id="msg-pedido"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Histórico de Pedidos</h2>
+      <input class="search" id="busca-pedido" placeholder="Buscar por número do pedido ou empresa...">
+      <div class="tablewrap">
+        <table id="tbl-pedidos">
+          <thead><tr><th>Nº Pedido</th><th>Empresa</th><th>Data</th><th>Valor total</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <section id="tab-config" class="tab hidden">
+    <div class="actions" style="margin-bottom:16px">
+      <button id="subnav-empresas" class="subnav-btn active" type="button">🏢 Cadastro de Empresas</button>
+      <button id="subnav-assinaturas" class="subnav-btn" type="button">✍️ Assinaturas</button>
+    </div>
+
+    <div id="subtab-empresas">
     <div class="card">
       <h2 id="empresa-form-titulo">Cadastro de Empresas</h2>
       <input type="hidden" id="empresa-editando-id">
@@ -247,6 +308,33 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
           <thead><tr><th>Razão Social</th><th>CNPJ</th><th>Telefone</th><th>Endereço</th><th>Email</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
+      </div>
+    </div>
+    </div>
+
+    <div id="subtab-assinaturas" class="hidden">
+      <div class="card">
+        <h2 id="assinatura-form-titulo">Cadastro de Assinaturas</h2>
+        <input type="hidden" id="assinatura-editando-id">
+        <div class="grid">
+          <div class="field"><label>Nome</label><input id="assin-nome" placeholder="Nome completo"></div>
+          <div class="field"><label>Posto/Graduação</label><input id="assin-posto" placeholder="Ex: Capitão De Fragata"></div>
+          <div class="field"><label>Função</label><input id="assin-funcao" placeholder="Ex: Agente Fiscal"></div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="btn-salvar-assinatura">Cadastrar assinatura</button>
+          <button id="btn-cancelar-edicao-assinatura" type="button" class="hidden">Cancelar edição</button>
+          <span id="msg-assinatura"></span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Assinaturas cadastradas</h2>
+        <div class="tablewrap">
+          <table id="tbl-assinaturas">
+            <thead><tr><th>Nome</th><th>Posto/Graduação</th><th>Função</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </section>
@@ -316,19 +404,37 @@ function empresaFromDoc(d){
   const r = d.data();
   return { id:d.id, nome:r.nome||'', cnpj:r.cnpj||'', telefone:r.telefone||'', endereco:r.endereco||'', email:r.email||'' };
 }
+function assinaturaFromDoc(d){
+  const r = d.data();
+  return { id:d.id, nome:r.nome||'', posto:r.posto||'', funcao:r.funcao||'' };
+}
+function pedidoFromDoc(d){
+  const r = d.data();
+  return { id:d.id, numeroPedido:r.numeroPedido||'', dataEmissao:r.dataEmissao||'', empresaNome:r.empresaNome||'',
+    empresaCnpj:r.empresaCnpj||'', empresaEndereco:r.empresaEndereco||'', empresaTelefone:r.empresaTelefone||'', empresaEmail:r.empresaEmail||'',
+    numeroEmpenho:r.numeroEmpenho||'', itens:r.itens||[], valorTotal:Number(r.valorTotal)||0,
+    obs:r.obs||'', contato:r.contato||'', prazoRecebimento:r.prazoRecebimento||'',
+    assinatura1:r.assinatura1||null, assinatura2:r.assinatura2||null };
+}
 
 let empresas = [];
+let assinaturas = [];
+let pedidos = [];
 
 async function carregarDados(){
   const uidAtual = usuarioAtual.uid;
-  const [empSnap, nfSnap, empresaSnap] = await Promise.all([
+  const [empSnap, nfSnap, empresaSnap, assinaturaSnap, pedidoSnap] = await Promise.all([
     getDocs(query(collection(db,'empenhos'), where('userId','==',uidAtual))),
     getDocs(query(collection(db,'notasFiscais'), where('userId','==',uidAtual))),
-    getDocs(query(collection(db,'empresas'), where('userId','==',uidAtual)))
+    getDocs(query(collection(db,'empresas'), where('userId','==',uidAtual))),
+    getDocs(query(collection(db,'assinaturas'), where('userId','==',uidAtual))),
+    getDocs(query(collection(db,'pedidos'), where('userId','==',uidAtual)))
   ]);
   empenhos = empSnap.docs.map(empenhoFromDoc);
   notasFiscais = nfSnap.docs.map(nfFromDoc);
   empresas = empresaSnap.docs.map(empresaFromDoc);
+  assinaturas = assinaturaSnap.docs.map(assinaturaFromDoc);
+  pedidos = pedidoSnap.docs.map(pedidoFromDoc);
 }
 
 // ---- Login / Autenticação ----
@@ -346,7 +452,8 @@ async function mostrarApp(user){
   }catch(err){
     console.error('Erro ao carregar dados:', err.code, err.message);
   }
-  renderSaldos(); renderSelectNE(); renderHistorico(); renderEmpresas();
+  renderSaldos(); renderSelectNE(); renderHistorico(); renderEmpresas(); renderAssinaturas();
+  popularSelectEmpresaPedido(); popularSelectAssinaturas(); renderPedidos();
 }
 function loginMsg(texto, ok){
   const msg = document.getElementById('login-msg');
@@ -408,7 +515,8 @@ document.querySelectorAll('nav button').forEach(btn=>{
     if(btn.dataset.tab==='saldos') renderSaldos();
     if(btn.dataset.tab==='baixa') renderSelectNE();
     if(btn.dataset.tab==='historico') renderHistorico();
-    if(btn.dataset.tab==='config') renderEmpresas();
+    if(btn.dataset.tab==='config') { renderEmpresas(); renderAssinaturas(); }
+    if(btn.dataset.tab==='pedidos') { popularSelectEmpresaPedido(); popularSelectAssinaturas(); renderPedidos(); }
   });
 });
 
@@ -687,6 +795,20 @@ document.getElementById('btn-baixar').addEventListener('click', async ()=>{
   document.querySelector('#tbl-nf-itens tbody').innerHTML='';
 });
 
+// ---- Configurações: sub-navegação ----
+document.getElementById('subnav-empresas').addEventListener('click', ()=>{
+  document.getElementById('subnav-empresas').classList.add('active');
+  document.getElementById('subnav-assinaturas').classList.remove('active');
+  document.getElementById('subtab-empresas').classList.remove('hidden');
+  document.getElementById('subtab-assinaturas').classList.add('hidden');
+});
+document.getElementById('subnav-assinaturas').addEventListener('click', ()=>{
+  document.getElementById('subnav-assinaturas').classList.add('active');
+  document.getElementById('subnav-empresas').classList.remove('active');
+  document.getElementById('subtab-assinaturas').classList.remove('hidden');
+  document.getElementById('subtab-empresas').classList.add('hidden');
+});
+
 // ---- Configurações: Cadastro de Empresas ----
 function renderEmpresas(){
   // atualiza o datalist usado no cadastro de empenho
@@ -771,6 +893,81 @@ window.removerEmpresa = async function(id){
   catch(err){ alert('Erro ao excluir: '+err.message); return; }
   empresas = empresas.filter(e=>e.id!==id);
   renderEmpresas();
+};
+
+// ---- Configurações: Cadastro de Assinaturas ----
+function renderAssinaturas(){
+  const tbody = document.querySelector('#tbl-assinaturas tbody');
+  if(assinaturas.length===0){
+    tbody.innerHTML = `<tr><td colspan="4" class="empty">Nenhuma assinatura cadastrada ainda.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = assinaturas.map(a=>`
+    <tr>
+      <td>${a.nome}</td><td>${a.posto||'-'}</td><td>${a.funcao||'-'}</td>
+      <td style="display:flex; gap:8px">
+        <button class="btn-link" onclick="editarAssinatura('${a.id}')">Editar</button>
+        <button class="danger" onclick="removerAssinatura('${a.id}')">Excluir</button>
+      </td>
+    </tr>`).join('');
+}
+
+document.getElementById('btn-salvar-assinatura').addEventListener('click', async ()=>{
+  const msg = document.getElementById('msg-assinatura');
+  const idEditando = document.getElementById('assinatura-editando-id').value;
+  const nome = document.getElementById('assin-nome').value.trim();
+  const posto = document.getElementById('assin-posto').value.trim();
+  const funcao = document.getElementById('assin-funcao').value.trim();
+
+  if(!nome){ msg.className='msg err'; msg.textContent='Informe ao menos o nome.'; return; }
+  const dados = { nome, posto, funcao };
+
+  try{
+    if(idEditando){
+      await updateDoc(doc(db,'assinaturas',idEditando), dados);
+      const idx = assinaturas.findIndex(a=>a.id===idEditando);
+      if(idx>-1) assinaturas[idx] = { id:idEditando, ...dados };
+      msg.className='msg ok'; msg.textContent='Assinatura atualizada com sucesso.';
+    } else {
+      const ref = await addDoc(collection(db,'assinaturas'), { ...dados, userId: usuarioAtual.uid, createdAt: Date.now() });
+      assinaturas.push({ id:ref.id, ...dados });
+      msg.className='msg ok'; msg.textContent='Assinatura cadastrada com sucesso.';
+    }
+  }catch(err){ msg.className='msg err'; msg.textContent='Erro ao salvar: '+err.message; return; }
+
+  cancelarEdicaoAssinatura();
+  renderAssinaturas();
+  popularSelectAssinaturas();
+});
+
+window.editarAssinatura = function(id){
+  const a = assinaturas.find(x=>x.id===id);
+  if(!a) return;
+  document.getElementById('assinatura-editando-id').value = a.id;
+  document.getElementById('assin-nome').value = a.nome;
+  document.getElementById('assin-posto').value = a.posto;
+  document.getElementById('assin-funcao').value = a.funcao;
+  document.getElementById('assinatura-form-titulo').textContent = 'Editando assinatura';
+  document.getElementById('btn-salvar-assinatura').textContent = 'Salvar alterações';
+  document.getElementById('btn-cancelar-edicao-assinatura').classList.remove('hidden');
+};
+
+function cancelarEdicaoAssinatura(){
+  document.getElementById('assinatura-editando-id').value = '';
+  ['assin-nome','assin-posto','assin-funcao'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('assinatura-form-titulo').textContent = 'Cadastro de Assinaturas';
+  document.getElementById('btn-salvar-assinatura').textContent = 'Cadastrar assinatura';
+  document.getElementById('btn-cancelar-edicao-assinatura').classList.add('hidden');
+}
+document.getElementById('btn-cancelar-edicao-assinatura').addEventListener('click', cancelarEdicaoAssinatura);
+
+window.removerAssinatura = async function(id){
+  if(!confirm('Excluir esta assinatura?')) return;
+  try{ await deleteDoc(doc(db,'assinaturas',id)); }
+  catch(err){ alert('Erro ao excluir: '+err.message); return; }
+  assinaturas = assinaturas.filter(a=>a.id!==id);
+  renderAssinaturas();
+  popularSelectAssinaturas();
 };
 
 // ---- Histórico de NFs (agrupado por empresa) ----
@@ -949,6 +1146,210 @@ document.getElementById('btn-export-nf').addEventListener('click', ()=>{
   const rows = notasFiscais.map(n=>[n.numeroNF,n.data,n.numeroEmpenho,n.item,n.qtd,n.valorBaixado.toFixed(2),n.saldoAposQtd,n.saldoAposValor.toFixed(2)]);
   baixarArquivo('historico_notas_fiscais.csv', toCSV(headers, rows));
 });
+
+// ---- Pedidos de Gêneros ----
+function popularSelectEmpresaPedido(){
+  const sel = document.getElementById('ped-empresa');
+  if(empresas.length===0){
+    sel.innerHTML = `<option value="">Nenhuma empresa cadastrada</option>`;
+  } else {
+    sel.innerHTML = `<option value="">Selecione a empresa...</option>` +
+      empresas.map(e=>`<option value="${e.id}">${e.nome}</option>`).join('');
+  }
+}
+function popularSelectAssinaturas(){
+  const opcoes = assinaturas.length===0
+    ? `<option value="">Nenhuma assinatura cadastrada</option>`
+    : `<option value="">Selecione...</option>` + assinaturas.map(a=>`<option value="${a.id}">${a.nome} — ${a.funcao||'-'}</option>`).join('');
+  document.getElementById('ped-assin1').innerHTML = opcoes;
+  document.getElementById('ped-assin2').innerHTML = opcoes;
+}
+
+document.getElementById('ped-empresa').addEventListener('change', ()=>{
+  const id = document.getElementById('ped-empresa').value;
+  const info = document.getElementById('ped-empresa-info');
+  const wrapEmpenho = document.getElementById('ped-empenho-wrap');
+  const wrapItens = document.getElementById('ped-itens-wrap');
+  const wrapDetalhes = document.getElementById('ped-detalhes-wrap');
+  wrapItens.classList.add('hidden');
+  wrapDetalhes.classList.add('hidden');
+
+  const e = empresas.find(x=>x.id===id);
+  if(!e){ info.classList.add('hidden'); wrapEmpenho.classList.add('hidden'); return; }
+
+  info.innerHTML = `<b>${e.nome}</b> — CNPJ: ${e.cnpj||'-'} — Tel: ${e.telefone||'-'} — Email: ${e.email||'-'}<br>Endereço: ${e.endereco||'-'}`;
+  info.classList.remove('hidden');
+
+  const nesDaEmpresa = [...new Set(empenhos.filter(x=>x.empresa===e.nome).map(x=>x.numero))];
+  const selEmp = document.getElementById('ped-empenho');
+  if(nesDaEmpresa.length===0){
+    selEmp.innerHTML = `<option value="">Nenhum empenho cadastrado para essa empresa</option>`;
+  } else {
+    selEmp.innerHTML = `<option value="">Selecione o empenho...</option>` + nesDaEmpresa.map(ne=>`<option value="${ne}">${ne}</option>`).join('');
+  }
+  wrapEmpenho.classList.remove('hidden');
+});
+
+document.getElementById('ped-empenho').addEventListener('change', ()=>{
+  const ne = document.getElementById('ped-empenho').value;
+  const wrapItens = document.getElementById('ped-itens-wrap');
+  const wrapDetalhes = document.getElementById('ped-detalhes-wrap');
+  const tbody = document.querySelector('#tbl-ped-itens tbody');
+  if(!ne){ wrapItens.classList.add('hidden'); wrapDetalhes.classList.add('hidden'); return; }
+
+  const itens = empenhos.filter(e=>e.numero===ne);
+  tbody.innerHTML = itens.map(e=>`
+    <tr data-id="${e.id}">
+      <td><input type="checkbox" class="ped-item-check"></td>
+      <td>${e.item}</td><td>${e.uf||'-'}</td><td>${fmtMoney(e.vunit)}</td>
+      <td>${e.saldoQtd} un.</td>
+      <td><input type="number" class="ped-item-qtd" min="0" max="${e.saldoQtd}" step="1" style="width:100px" placeholder="0"></td>
+    </tr>`).join('');
+  wrapItens.classList.remove('hidden');
+  wrapDetalhes.classList.remove('hidden');
+});
+
+function gerarPDFPedido(p){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'pt', format:'a4' });
+  const margemEsq = 40;
+  let y = 45;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(13);
+  doc.text('MODELO DE PEDIDO DE MATERIAL', 297, y, {align:'center'}); y += 22;
+
+  doc.setFontSize(11);
+  doc.text('COLÉGIO NAVAL', margemEsq, y);
+  doc.text(`Nº PEDIDO: ${p.numeroPedido}`, 555, y, {align:'right'}); y += 16;
+  doc.setFont('helvetica','normal');
+  doc.text(`ENDEREÇO: ${p.enderecoInstituicao}`, margemEsq, y); y += 16;
+  doc.text(`CNPJ: ${p.cnpjInstituicao}`, margemEsq, y); y += 16;
+  doc.text(`TELE/FAX: ${p.telefoneInstituicao}`, margemEsq, y);
+  doc.text(`DATA EMISSÃO: ${p.dataEmissao}`, 555, y, {align:'right'}); y += 16;
+  doc.setFont('helvetica','bold');
+  doc.text(`FORNECEDOR: ${p.empresaNome}`, margemEsq, y); y += 20;
+
+  const linhasTabela = p.itens.map((it,i)=>[i+1, it.item, it.uf||'-', it.qtd, fmtMoney(it.valorUnitario), fmtMoney(it.valorTotal)]);
+  doc.autoTable({
+    startY: y,
+    head: [['ITEM','NOMENCLATURA','UF','QTD','VALOR UNITÁRIO','VALOR TOTAL']],
+    body: linhasTabela,
+    foot: [['', '', '', '', 'TOTAL', fmtMoney(p.valorTotal)]],
+    theme: 'grid',
+    styles: { fontSize: 9, cellPadding: 4 },
+    headStyles: { fillColor: [60,90,110] },
+    footStyles: { fillColor: [230,230,230], textColor: 0, fontStyle: 'bold' },
+    margin: { left: margemEsq, right: 40 }
+  });
+  y = doc.lastAutoTable.finalY + 20;
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  if(p.obs){ doc.text(`Obs: ${p.obs}`, margemEsq, y); y += 16; }
+  doc.text(`EMPENHO: ${p.numeroEmpenho}`, margemEsq, y); y += 20;
+  doc.text(`Contato: procurar por: ${p.contato||'_______________________'}`, margemEsq, y); y += 18;
+  doc.text(`DATA/HORA LIMITE PARA RECEBIMENTO: ${p.prazoRecebimento||'_______________________'}`, margemEsq, y); y += 50;
+
+  const colEsq = margemEsq+40, colDir = 340;
+  doc.setFont('helvetica','bold');
+  doc.text(p.assinatura1 ? p.assinatura1.nome : '_______________________', colEsq, y, {align:'center'});
+  doc.text(p.assinatura2 ? p.assinatura2.nome : '_______________________', colDir, y, {align:'center'}); y += 14;
+  doc.setFont('helvetica','normal');
+  doc.text(p.assinatura1 ? p.assinatura1.posto : '', colEsq, y, {align:'center'});
+  doc.text(p.assinatura2 ? p.assinatura2.posto : '', colDir, y, {align:'center'}); y += 14;
+  doc.text(p.assinatura1 ? p.assinatura1.funcao : '', colEsq, y, {align:'center'});
+  doc.text(p.assinatura2 ? p.assinatura2.funcao : '', colDir, y, {align:'center'});
+
+  return doc;
+}
+
+document.getElementById('btn-gerar-pedido').addEventListener('click', async ()=>{
+  const msg = document.getElementById('msg-pedido');
+  const numeroPedido = document.getElementById('ped-numero').value.trim();
+  const empresaId = document.getElementById('ped-empresa').value;
+  const numeroEmpenho = document.getElementById('ped-empenho').value;
+  const empresa = empresas.find(e=>e.id===empresaId);
+
+  if(!numeroPedido){ msg.className='msg err'; msg.textContent='Informe o número do pedido.'; return; }
+  if(!empresa){ msg.className='msg err'; msg.textContent='Selecione a empresa fornecedora.'; return; }
+  if(!numeroEmpenho){ msg.className='msg err'; msg.textContent='Selecione o empenho.'; return; }
+
+  const linhas = [...document.querySelectorAll('#tbl-ped-itens tbody tr')];
+  const itensSelecionados = [];
+  linhas.forEach(tr=>{
+    const marcado = tr.querySelector('.ped-item-check').checked;
+    const qtd = parseInt(tr.querySelector('.ped-item-qtd').value);
+    if(!marcado || !qtd || qtd<=0) return;
+    const e = empenhos.find(x=>x.id===tr.dataset.id);
+    if(!e) return;
+    itensSelecionados.push({ item:e.item, uf:e.uf, qtd, valorUnitario:e.vunit, valorTotal:qtd*e.vunit });
+  });
+  if(itensSelecionados.length===0){ msg.className='msg err'; msg.textContent='Marque ao menos um item e informe a quantidade.'; return; }
+
+  const assin1 = assinaturas.find(a=>a.id===document.getElementById('ped-assin1').value) || null;
+  const assin2 = assinaturas.find(a=>a.id===document.getElementById('ped-assin2').value) || null;
+  const valorTotal = itensSelecionados.reduce((s,i)=>s+i.valorTotal,0);
+  const dataEmissao = new Date().toLocaleDateString('pt-BR');
+
+  const pedidoData = {
+    numeroPedido, dataEmissao, empresaNome:empresa.nome, empresaCnpj:empresa.cnpj,
+    empresaEndereco:empresa.endereco, empresaTelefone:empresa.telefone, empresaEmail:empresa.email,
+    numeroEmpenho, itens:itensSelecionados, valorTotal,
+    obs: document.getElementById('ped-obs').value.trim(),
+    contato: document.getElementById('ped-contato').value.trim(),
+    prazoRecebimento: document.getElementById('ped-prazo').value.trim(),
+    assinatura1: assin1 ? {nome:assin1.nome, posto:assin1.posto, funcao:assin1.funcao} : null,
+    assinatura2: assin2 ? {nome:assin2.nome, posto:assin2.posto, funcao:assin2.funcao} : null
+  };
+
+  try{
+    const ref = await addDoc(collection(db,'pedidos'), { ...pedidoData, userId: usuarioAtual.uid, createdAt: Date.now() });
+    pedidos.push({ id:ref.id, ...pedidoData });
+  }catch(err){ msg.className='msg err'; msg.textContent='Erro ao salvar pedido: '+err.message; return; }
+
+  const doc = gerarPDFPedido({ ...pedidoData,
+    enderecoInstituicao:'BR 158 Nº 12174 SALA 05 PLANALTO – PATO BRANCO -PR',
+    cnpjInstituicao:'41.272.326/0001-55', telefoneInstituicao:'(46) 3225-1991' });
+  window.open(doc.output('bloburl'), '_blank');
+
+  msg.className='msg ok'; msg.textContent=`Pedido ${numeroPedido} gerado com sucesso.`;
+  renderPedidos();
+});
+
+function renderPedidos(){
+  const tbody = document.querySelector('#tbl-pedidos tbody');
+  const q = (document.getElementById('busca-pedido').value||'').toLowerCase();
+  const rows = pedidos.filter(p => !q || p.numeroPedido.toLowerCase().includes(q) || p.empresaNome.toLowerCase().includes(q));
+  if(rows.length===0){
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">Nenhum pedido gerado ainda.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.slice().reverse().map(p=>`
+    <tr>
+      <td>${p.numeroPedido}</td><td>${p.empresaNome}</td><td>${p.dataEmissao}</td><td>${fmtMoney(p.valorTotal)}</td>
+      <td style="display:flex; gap:8px">
+        <button class="btn-link" onclick="verPDFPedido('${p.id}')">Ver PDF</button>
+        <button class="danger" onclick="removerPedido('${p.id}')">Excluir</button>
+      </td>
+    </tr>`).join('');
+}
+document.getElementById('busca-pedido').addEventListener('input', renderPedidos);
+
+window.verPDFPedido = function(id){
+  const p = pedidos.find(x=>x.id===id);
+  if(!p) return;
+  const doc = gerarPDFPedido({ ...p,
+    enderecoInstituicao:'BR 158 Nº 12174 SALA 05 PLANALTO – PATO BRANCO -PR',
+    cnpjInstituicao:'41.272.326/0001-55', telefoneInstituicao:'(46) 3225-1991' });
+  window.open(doc.output('bloburl'), '_blank');
+};
+
+window.removerPedido = async function(id){
+  if(!confirm('Excluir este pedido do histórico?')) return;
+  try{ await deleteDoc(doc(db,'pedidos',id)); }
+  catch(err){ alert('Erro ao excluir: '+err.message); return; }
+  pedidos = pedidos.filter(p=>p.id!==id);
+  renderPedidos();
+};
 
 // init
 document.getElementById('nf-data').valueAsDate = new Date();

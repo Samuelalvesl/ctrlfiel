@@ -302,6 +302,7 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
     <div class="actions" style="margin-bottom:16px">
       <button id="subnav-empresas" class="subnav-btn active" type="button">🏢 Cadastro de Empresas</button>
       <button id="subnav-assinaturas" class="subnav-btn" type="button">✍️ Assinaturas</button>
+      <button id="subnav-usuarios" class="subnav-btn hidden" type="button">🔐 Usuários</button>
     </div>
 
     <div id="subtab-empresas">
@@ -358,6 +359,29 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
         </div>
       </div>
     </div>
+
+    <div id="subtab-usuarios" class="hidden">
+      <div class="card">
+        <h2>Autorizar novo usuário</h2>
+        <p style="color:var(--muted); font-size:.78rem; margin-top:-8px; margin-bottom:14px">Informe o email da pessoa. Ela só conseguirá criar a própria conta depois de autorizada aqui.</p>
+        <div class="grid">
+          <div class="field"><label>Email</label><input id="user-email-novo" type="email" placeholder="pessoa@exemplo.com"></div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="btn-autorizar-usuario">Autorizar usuário</button>
+          <span id="msg-usuario"></span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Usuários autorizados</h2>
+        <div class="tablewrap">
+          <table id="tbl-usuarios">
+            <thead><tr><th>Email</th><th>Perfil</th><th>Conta criada?</th><th>Status</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </section>
 
 </main>
@@ -389,7 +413,7 @@ const firebaseConfig = {
   appId: "1:1030664699389:web:6f151985c892b7d2e2ed94"
 };
 
-let auth, db, storage, usuarioAtual = null;
+let auth, db, storage, usuarioAtual = null, usuarioAutorizacao = null;
 try{
   const app = initializeApp(firebaseConfig);
   auth = getAuth(app);
@@ -472,11 +496,51 @@ function mostrarLogin(){
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('app-wrap').classList.add('hidden');
 }
+async function verificarOuInicializarAutorizacao(user){
+  const emailLower = user.email.toLowerCase();
+  const autRef = doc(db,'usuariosAutorizados', emailLower);
+  const bootstrapRef = doc(db,'sistema','adminBootstrap');
+
+  const bootstrapSnap = await getDoc(bootstrapRef);
+  if(!bootstrapSnap.exists()){
+    // ninguém é administrador ainda: quem estiver entrando agora vira o primeiro admin
+    const dados = { email:emailLower, uid:user.uid, status:'ativo', isAdmin:true, criadoEm:Date.now(), ativadoEm:Date.now() };
+    await setDoc(autRef, dados);
+    await setDoc(bootstrapRef, { criadoEm:Date.now(), por:emailLower });
+    return dados;
+  }
+
+  const autSnap = await getDoc(autRef);
+  if(!autSnap.exists()){
+    throw new Error('Seu acesso ainda não foi autorizado. Peça ao administrador para liberar seu email.');
+  }
+  const dados = autSnap.data();
+  if(dados.status !== 'ativo'){
+    throw new Error('Seu acesso foi desativado. Entre em contato com o administrador.');
+  }
+  if(!dados.uid){
+    await updateDoc(autRef, { uid:user.uid, ativadoEm:Date.now() });
+    dados.uid = user.uid;
+  }
+  return dados;
+}
+
 async function mostrarApp(user){
+  let autorizacao;
+  try{
+    autorizacao = await verificarOuInicializarAutorizacao(user);
+  }catch(err){
+    try{ await signOut(auth); }catch(e){}
+    mostrarLogin();
+    loginMsg(err.message, false);
+    return;
+  }
+
   usuarioAtual = user;
+  usuarioAutorizacao = autorizacao;
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app-wrap').classList.remove('hidden');
-  document.getElementById('user-email').textContent = user.email;
+  document.getElementById('user-email').textContent = user.email + (autorizacao.isAdmin ? ' (admin)' : '');
   try{
     await carregarDados();
   }catch(err){
@@ -485,6 +549,7 @@ async function mostrarApp(user){
   renderSaldos(); renderSelectNE(); renderHistorico(); renderEmpresas(); renderAssinaturas();
   popularSelectEmpresaPedido(); popularSelectAssinaturas(); renderPedidos();
   popularSelectEmpresaDoc(); renderDocumentos();
+  renderSubnavUsuarios();
 }
 function loginMsg(texto, ok){
   const msg = document.getElementById('login-msg');
@@ -519,6 +584,7 @@ document.getElementById('btn-sair').addEventListener('click', async ()=>{
   if(!auth) return;
   await signOut(auth);
   usuarioAtual = null;
+  usuarioAutorizacao = null;
   mostrarLogin();
 });
 function traduzErroFirebase(err){
@@ -828,17 +894,16 @@ document.getElementById('btn-baixar').addEventListener('click', async ()=>{
 });
 
 // ---- Configurações: sub-navegação ----
-document.getElementById('subnav-empresas').addEventListener('click', ()=>{
-  document.getElementById('subnav-empresas').classList.add('active');
-  document.getElementById('subnav-assinaturas').classList.remove('active');
-  document.getElementById('subtab-empresas').classList.remove('hidden');
-  document.getElementById('subtab-assinaturas').classList.add('hidden');
-});
-document.getElementById('subnav-assinaturas').addEventListener('click', ()=>{
-  document.getElementById('subnav-assinaturas').classList.add('active');
-  document.getElementById('subnav-empresas').classList.remove('active');
-  document.getElementById('subtab-assinaturas').classList.remove('hidden');
-  document.getElementById('subtab-empresas').classList.add('hidden');
+const SUBABAS_CONFIG = ['empresas','assinaturas','usuarios'];
+function mostrarSubabaConfig(ativa){
+  SUBABAS_CONFIG.forEach(nome=>{
+    document.getElementById('subnav-'+nome).classList.toggle('active', nome===ativa);
+    document.getElementById('subtab-'+nome).classList.toggle('hidden', nome!==ativa);
+  });
+  if(ativa==='usuarios') carregarUsuarios();
+}
+SUBABAS_CONFIG.forEach(nome=>{
+  document.getElementById('subnav-'+nome).addEventListener('click', ()=>mostrarSubabaConfig(nome));
 });
 
 // ---- Configurações: Cadastro de Empresas ----
@@ -1548,6 +1613,86 @@ window.removerDocumento = async function(id){
   }catch(err){ alert('Erro ao excluir: '+err.message); return; }
   documentos = documentos.filter(d=>d.id!==id);
   renderDocumentos();
+};
+
+// ---- Configurações: Gerenciamento de Usuários (admin) ----
+function renderSubnavUsuarios(){
+  const btn = document.getElementById('subnav-usuarios');
+  if(usuarioAutorizacao && usuarioAutorizacao.isAdmin){
+    btn.classList.remove('hidden');
+  } else {
+    btn.classList.add('hidden');
+  }
+}
+
+let usuariosAutorizadosLista = [];
+
+async function carregarUsuarios(){
+  if(!usuarioAutorizacao || !usuarioAutorizacao.isAdmin) return;
+  const tbody = document.querySelector('#tbl-usuarios tbody');
+  tbody.innerHTML = `<tr><td colspan="5" class="empty">Carregando...</td></tr>`;
+  try{
+    const snap = await getDocs(collection(db,'usuariosAutorizados'));
+    usuariosAutorizadosLista = snap.docs.map(d=>({ email:d.id, ...d.data() }));
+  }catch(err){
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">Erro ao carregar: ${err.message}</td></tr>`;
+    return;
+  }
+  renderUsuarios();
+}
+
+function renderUsuarios(){
+  const tbody = document.querySelector('#tbl-usuarios tbody');
+  if(!tbody) return;
+  if(usuariosAutorizadosLista.length===0){
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">Nenhum usuário autorizado ainda.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = usuariosAutorizadosLista.map(u=>{
+    const souEu = usuarioAtual && u.email === usuarioAtual.email.toLowerCase();
+    const statusHtml = u.status==='ativo' ? `<span class="pill ok">Ativo</span>` : `<span class="pill off">Desativado</span>`;
+    const acao = souEu ? '-' : `<button class="btn-link" onclick="toggleStatusUsuario('${u.email}')">${u.status==='ativo'?'Desativar':'Ativar'}</button>`;
+    return `<tr>
+      <td>${u.email}${souEu?' (você)':''}</td>
+      <td>${u.isAdmin?'Administrador':'Usuário'}</td>
+      <td>${u.uid?'Sim':'Não'}</td>
+      <td>${statusHtml}</td>
+      <td>${acao}</td>
+    </tr>`;
+  }).join('');
+}
+
+document.getElementById('btn-autorizar-usuario').addEventListener('click', async ()=>{
+  const msg = document.getElementById('msg-usuario');
+  const emailNovo = document.getElementById('user-email-novo').value.trim().toLowerCase();
+  if(!emailNovo || !emailNovo.includes('@')){ msg.className='msg err'; msg.textContent='Informe um email válido.'; return; }
+
+  try{
+    const ref = doc(db,'usuariosAutorizados', emailNovo);
+    const snap = await getDoc(ref);
+    if(snap.exists()){
+      await updateDoc(ref, { status:'ativo' });
+      msg.className='msg ok'; msg.textContent='Usuário reativado com sucesso.';
+    } else {
+      await setDoc(ref, { email:emailNovo, status:'ativo', isAdmin:false, autorizadoPor:usuarioAtual.email, criadoEm:Date.now() });
+      msg.className='msg ok'; msg.textContent='Usuário autorizado. Ele já pode criar a conta pelo sistema.';
+    }
+  }catch(err){ msg.className='msg err'; msg.textContent='Erro ao autorizar: '+err.message; return; }
+
+  document.getElementById('user-email-novo').value='';
+  carregarUsuarios();
+});
+
+window.toggleStatusUsuario = async function(email){
+  const u = usuariosAutorizadosLista.find(x=>x.email===email);
+  if(!u) return;
+  const novoStatus = u.status==='ativo' ? 'desativado' : 'ativo';
+  if(!confirm(`${novoStatus==='ativo'?'Ativar':'Desativar'} o acesso de ${email}?`)) return;
+  try{
+    await updateDoc(doc(db,'usuariosAutorizados',email), { status:novoStatus });
+    u.status = novoStatus;
+    renderUsuarios();
+  }catch(err){ alert('Erro ao atualizar: '+err.message); }
 };
 
 // init

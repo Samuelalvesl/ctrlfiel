@@ -720,6 +720,7 @@ function renderCardNE(ne, itens){
         <span>Saldo total<strong>${fmtMoney(totalSaldo)}</strong></span>
         <span>Itens<strong>${itens.length}</strong></span>
       </div>
+      <button class="danger" onclick="removerEmpenhoCompleto('${ne.replace(/'/g,"\\'")}')" title="Excluir este empenho e todos os seus itens">🗑️ Excluir empenho</button>
     </div>
     <div class="tablewrap">
       <table>
@@ -794,6 +795,17 @@ window.removerEmpenho = async function(id){
   try{ await deleteDoc(doc(db,'empenhos',id)); }
   catch(err){ alert('Erro ao excluir: '+err.message); return; }
   empenhos = empenhos.filter(e=>e.id!==id);
+  renderSaldos();
+};
+
+window.removerEmpenhoCompleto = async function(ne){
+  const itens = empenhos.filter(e=>e.numero===ne);
+  if(itens.length===0) return;
+  if(!confirm(`Excluir o empenho ${ne} por completo? Isso vai apagar todos os ${itens.length} item(ns) dele e atualizar os saldos. O histórico de notas fiscais vinculado será mantido, mas perderá a referência. Essa ação não pode ser desfeita.`)) return;
+  try{
+    await Promise.all(itens.map(e=>deleteDoc(doc(db,'empenhos',e.id))));
+  }catch(err){ alert('Erro ao excluir o empenho: '+err.message); return; }
+  empenhos = empenhos.filter(e=>e.numero!==ne);
   renderSaldos();
 };
 
@@ -930,6 +942,47 @@ function renderEmpresas(){
 }
 document.getElementById('busca-empresa').addEventListener('input', renderEmpresas);
 
+// ---- Máscaras de CNPJ e Telefone ----
+function mascararCNPJ(valor){
+  const d = valor.replace(/\D/g,'').slice(0,14);
+  let r = d;
+  if(d.length>2) r = d.slice(0,2)+'.'+d.slice(2);
+  if(d.length>5) r = r.slice(0,6)+'.'+d.slice(5);
+  if(d.length>8) r = r.slice(0,10)+'/'+d.slice(8);
+  if(d.length>12) r = r.slice(0,15)+'-'+d.slice(12);
+  return r;
+}
+function mascararTelefone(valor){
+  const d = valor.replace(/\D/g,'').slice(0,11);
+  if(d.length<=10){
+    // (XX) XXXX-XXXX
+    let r = d;
+    if(d.length>2) r = '('+d.slice(0,2)+') '+d.slice(2);
+    if(d.length>6) r = r.slice(0,9)+'-'+d.slice(6);
+    return r;
+  }
+  // (XX) XXXXX-XXXX
+  let r = '('+d.slice(0,2)+') '+d.slice(2);
+  if(d.length>7) r = r.slice(0,10)+'-'+d.slice(7);
+  return r;
+}
+function somenteDigitos(v){ return (v||'').replace(/\D/g,''); }
+
+document.getElementById('emp-cnpj').addEventListener('input', (e)=>{
+  const pos = e.target.selectionStart;
+  const antes = e.target.value.length;
+  e.target.value = mascararCNPJ(e.target.value);
+  const depois = e.target.value.length;
+  e.target.selectionEnd = pos + (depois-antes);
+});
+document.getElementById('emp-telefone').addEventListener('input', (e)=>{
+  const pos = e.target.selectionStart;
+  const antes = e.target.value.length;
+  e.target.value = mascararTelefone(e.target.value);
+  const depois = e.target.value.length;
+  e.target.selectionEnd = pos + (depois-antes);
+});
+
 document.getElementById('btn-salvar-empresa').addEventListener('click', async ()=>{
   const msg = document.getElementById('msg-empresa');
   const idEditando = document.getElementById('empresa-editando-id').value;
@@ -940,6 +993,15 @@ document.getElementById('btn-salvar-empresa').addEventListener('click', async ()
   const email = document.getElementById('emp-email').value.trim();
 
   if(!nome){ msg.className='msg err'; msg.textContent='Informe ao menos a Razão Social.'; return; }
+
+  if(cnpj){
+    const cnpjDigitos = somenteDigitos(cnpj);
+    const duplicado = empresas.some(e => e.id!==idEditando && somenteDigitos(e.cnpj)===cnpjDigitos && cnpjDigitos.length>0);
+    if(duplicado){
+      msg.className='msg err'; msg.textContent='Já existe uma empresa cadastrada com esse CNPJ.';
+      return;
+    }
+  }
 
   const dadosEmpresa = { nome, cnpj, telefone, endereco, email };
 

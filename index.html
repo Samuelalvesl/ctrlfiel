@@ -238,13 +238,8 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
       <div id="ped-empresa-info" class="hidden" style="margin-top:14px; padding:12px; background:var(--panel2); border-radius:8px; font-size:.85rem; color:var(--muted)"></div>
 
       <div id="ped-itens-wrap" class="hidden" style="margin-top:16px">
-        <label>Itens disponíveis (de todos os empenhos dessa empresa) — marque os itens e informe a quantidade solicitada</label>
-        <div class="tablewrap" style="margin-top:8px">
-          <table id="tbl-ped-itens">
-            <thead><tr><th></th><th>NE</th><th>Item</th><th>UF</th><th>Vlr. unit.</th><th>Saldo</th><th>Qtd. solicitada</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
+        <label>Itens disponíveis, organizados por empenho — marque os itens e informe a quantidade solicitada</label>
+        <div id="ped-itens-lista" style="margin-top:8px"></div>
       </div>
 
       <div id="ped-detalhes-wrap" class="hidden" style="margin-top:16px">
@@ -1167,7 +1162,7 @@ document.getElementById('ped-empresa').addEventListener('change', ()=>{
   const info = document.getElementById('ped-empresa-info');
   const wrapItens = document.getElementById('ped-itens-wrap');
   const wrapDetalhes = document.getElementById('ped-detalhes-wrap');
-  const tbody = document.querySelector('#tbl-ped-itens tbody');
+  const lista = document.getElementById('ped-itens-lista');
 
   const e = empresas.find(x=>x.id===id);
   if(!e){
@@ -1178,18 +1173,35 @@ document.getElementById('ped-empresa').addEventListener('change', ()=>{
   info.innerHTML = `<b>${e.nome}</b> — CNPJ: ${e.cnpj||'-'} — Tel: ${e.telefone||'-'} — Email: ${e.email||'-'}<br>Endereço: ${e.endereco||'-'}`;
   info.classList.remove('hidden');
 
-  // todos os itens de todos os empenhos dessa empresa, de uma vez, com saldo disponível
+  // itens com saldo disponível, agrupados por número de empenho (NE)
   const itensDaEmpresa = empenhos.filter(x=>x.empresa===e.nome && x.saldoQtd>0);
   if(itensDaEmpresa.length===0){
-    tbody.innerHTML = `<tr><td colspan="7" class="empty">Nenhum empenho com saldo disponível para essa empresa.</td></tr>`;
+    lista.innerHTML = `<div class="empty">Nenhum empenho com saldo disponível para essa empresa.</div>`;
   } else {
-    tbody.innerHTML = itensDaEmpresa.map(x=>`
-      <tr data-id="${x.id}">
-        <td><input type="checkbox" class="ped-item-check"></td>
-        <td>${x.numero}</td><td>${x.item}</td><td>${x.uf||'-'}</td><td>${fmtMoney(x.vunit)}</td>
-        <td>${x.saldoQtd} un.</td>
-        <td><input type="number" class="ped-item-qtd" min="0" max="${x.saldoQtd}" step="1" style="width:100px" placeholder="0"></td>
-      </tr>`).join('');
+    const porNE = {};
+    const ordemNE = [];
+    itensDaEmpresa.forEach(x=>{
+      if(!porNE[x.numero]){ porNE[x.numero] = []; ordemNE.push(x.numero); }
+      porNE[x.numero].push(x);
+    });
+    lista.innerHTML = ordemNE.map(ne=>`
+      <div class="grupo-empenho" style="margin-bottom:12px">
+        <div class="grupo-header"><div class="info"><span><b>Empenho nº ${ne}</b></span></div></div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th></th><th>Item</th><th>UF</th><th>Vlr. unit.</th><th>Saldo</th><th>Qtd. solicitada</th></tr></thead>
+            <tbody>
+              ${porNE[ne].map(x=>`
+                <tr data-id="${x.id}">
+                  <td><input type="checkbox" class="ped-item-check"></td>
+                  <td>${x.item}</td><td>${x.uf||'-'}</td><td>${fmtMoney(x.vunit)}</td>
+                  <td>${x.saldoQtd} un.</td>
+                  <td><input type="number" class="ped-item-qtd" min="0" max="${x.saldoQtd}" step="1" style="width:100px" placeholder="0"></td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`).join('');
   }
   wrapItens.classList.remove('hidden');
   wrapDetalhes.classList.remove('hidden');
@@ -1232,7 +1244,7 @@ function gerarPDFPedido(p){
   if(p.obs){ doc.text(`Obs: ${p.obs}`, margemEsq, y); y += 16; }
   doc.text(`EMPENHO: ${p.numeroEmpenho}`, margemEsq, y); y += 20;
   doc.text(`Contato: procurar por: ${p.contato||'_______________________'}`, margemEsq, y); y += 18;
-  doc.text(`DATA/HORA LIMITE PARA RECEBIMENTO: ${p.prazoRecebimento||'_______________________'}`, margemEsq, y); y += 50;
+  doc.text(`DATA/HORA LIMITE PARA RECEBIMENTO: ${p.prazoRecebimento||'_______________________'}`, margemEsq, y); y += 78;
 
   const colEsq = 165, colDir = 430;
   doc.setFont('helvetica','bold');
@@ -1256,7 +1268,7 @@ document.getElementById('btn-gerar-pedido').addEventListener('click', async ()=>
   if(!numeroPedido){ msg.className='msg err'; msg.textContent='Informe o número do pedido.'; return; }
   if(!empresa){ msg.className='msg err'; msg.textContent='Selecione a empresa fornecedora.'; return; }
 
-  const linhas = [...document.querySelectorAll('#tbl-ped-itens tbody tr')];
+  const linhas = [...document.querySelectorAll('#ped-itens-lista tbody tr')];
   const itensSelecionados = [];
   const nesUsados = new Set();
   linhas.forEach(tr=>{

@@ -79,6 +79,12 @@ button.danger{background:transparent; color:var(--danger); border:1px solid var(
 .empresa-conteudo{padding:12px; background:var(--bg)}
 .subnav-btn{background:var(--panel); border:1px solid var(--line); color:var(--muted); padding:9px 16px; border-radius:7px; cursor:pointer; font-weight:600; font-size:.85rem}
 .subnav-btn.active{background:var(--accent); color:#fff; border-color:var(--accent)}
+.doc-item{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap}
+.doc-item:last-child{border-bottom:none}
+.doc-item .doc-info{font-size:.85rem}
+.doc-item .doc-info .doc-nome{font-weight:600}
+.doc-item .doc-info .doc-meta{color:var(--muted); font-size:.75rem}
+.doc-item .doc-acoes{display:flex; gap:6px; flex-wrap:wrap}
 .nf-detail-row td{background:var(--panel2); padding:0}
 .nf-detail-inner{padding:12px 16px}
 .nf-detail-inner table{min-width:0}
@@ -153,6 +159,7 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
   <button data-tab="baixa">Registrar Nota Fiscal</button>
   <button data-tab="historico">Histórico de NFs</button>
   <button data-tab="pedidos">Pedidos</button>
+  <button data-tab="documentos">Documentos</button>
   <button data-tab="config">Configurações</button>
 </nav>
 
@@ -269,6 +276,28 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
     </div>
   </section>
 
+  <section id="tab-documentos" class="tab hidden">
+    <div class="card">
+      <h2>Enviar documento</h2>
+      <div class="grid">
+        <div class="field"><label>Empresa</label><select id="doc-empresa"></select></div>
+        <div class="field"><label>Nome/descrição do documento</label><input id="doc-nome" placeholder="Ex: Contrato 2026, Nota de empenho..."></div>
+        <div class="field"><label>Arquivo</label><input id="doc-arquivo" type="file"></div>
+      </div>
+      <div class="actions">
+        <button class="primary" id="btn-enviar-doc">Enviar documento</button>
+        <span id="msg-doc"></span>
+      </div>
+      <p style="color:var(--muted); font-size:.78rem; margin-top:10px">Tamanho máximo por arquivo: ~700KB.</p>
+    </div>
+
+    <div class="card">
+      <h2>Documentos por empresa</h2>
+      <input class="search" id="busca-doc" placeholder="Buscar por empresa ou nome do documento...">
+      <div id="documentos-container"></div>
+    </div>
+  </section>
+
   <section id="tab-config" class="tab hidden">
     <div class="actions" style="margin-bottom:16px">
       <button id="subnav-empresas" class="subnav-btn active" type="button">🏢 Cadastro de Empresas</button>
@@ -341,7 +370,7 @@ import {
   onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
-  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, where, writeBatch
+  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, getDocs, query, where, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
 
@@ -409,24 +438,33 @@ function pedidoFromDoc(d){
     assinatura1:r.assinatura1||null, assinatura2:r.assinatura2||null };
 }
 
+function documentoFromDoc(d){
+  const r = d.data();
+  return { id:d.id, empresaId:r.empresaId||'', empresaNome:r.empresaNome||'', nome:r.nome||'',
+    nomeArquivo:r.nomeArquivo||'', tipoArquivo:r.tipoArquivo||'', tamanho:Number(r.tamanho)||0 };
+}
+
 let empresas = [];
 let assinaturas = [];
 let pedidos = [];
+let documentos = [];
 
 async function carregarDados(){
   const uidAtual = usuarioAtual.uid;
-  const [empSnap, nfSnap, empresaSnap, assinaturaSnap, pedidoSnap] = await Promise.all([
+  const [empSnap, nfSnap, empresaSnap, assinaturaSnap, pedidoSnap, docSnap] = await Promise.all([
     getDocs(query(collection(db,'empenhos'), where('userId','==',uidAtual))),
     getDocs(query(collection(db,'notasFiscais'), where('userId','==',uidAtual))),
     getDocs(query(collection(db,'empresas'), where('userId','==',uidAtual))),
     getDocs(query(collection(db,'assinaturas'), where('userId','==',uidAtual))),
-    getDocs(query(collection(db,'pedidos'), where('userId','==',uidAtual)))
+    getDocs(query(collection(db,'pedidos'), where('userId','==',uidAtual))),
+    getDocs(query(collection(db,'documentos'), where('userId','==',uidAtual)))
   ]);
   empenhos = empSnap.docs.map(empenhoFromDoc);
   notasFiscais = nfSnap.docs.map(nfFromDoc);
   empresas = empresaSnap.docs.map(empresaFromDoc);
   assinaturas = assinaturaSnap.docs.map(assinaturaFromDoc);
   pedidos = pedidoSnap.docs.map(pedidoFromDoc);
+  documentos = docSnap.docs.map(documentoFromDoc);
 }
 
 // ---- Login / Autenticação ----
@@ -446,6 +484,7 @@ async function mostrarApp(user){
   }
   renderSaldos(); renderSelectNE(); renderHistorico(); renderEmpresas(); renderAssinaturas();
   popularSelectEmpresaPedido(); popularSelectAssinaturas(); renderPedidos();
+  popularSelectEmpresaDoc(); renderDocumentos();
 }
 function loginMsg(texto, ok){
   const msg = document.getElementById('login-msg');
@@ -509,6 +548,7 @@ document.querySelectorAll('nav button').forEach(btn=>{
     if(btn.dataset.tab==='historico') renderHistorico();
     if(btn.dataset.tab==='config') { renderEmpresas(); renderAssinaturas(); }
     if(btn.dataset.tab==='pedidos') { popularSelectEmpresaPedido(); popularSelectAssinaturas(); renderPedidos(); }
+    if(btn.dataset.tab==='documentos') { popularSelectEmpresaDoc(); renderDocumentos(); }
   });
 });
 
@@ -1352,6 +1392,162 @@ window.removerPedido = async function(id){
   catch(err){ alert('Erro ao excluir: '+err.message); return; }
   pedidos = pedidos.filter(p=>p.id!==id);
   renderPedidos();
+};
+
+// ---- Documentos (armazenados no Firestore, agrupados por empresa) ----
+const LIMITE_TAMANHO_DOC = 700*1024; // ~700KB
+
+function popularSelectEmpresaDoc(){
+  const sel = document.getElementById('doc-empresa');
+  sel.innerHTML = empresas.length===0
+    ? `<option value="">Nenhuma empresa cadastrada</option>`
+    : `<option value="">Selecione a empresa...</option>` + empresas.map(e=>`<option value="${e.id}">${e.nome}</option>`).join('');
+}
+
+function arquivoParaBase64(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>resolve(reader.result);
+    reader.onerror = ()=>reject(new Error('Falha ao ler o arquivo.'));
+    reader.readAsDataURL(file);
+  });
+}
+function fmtTamanho(bytes){
+  if(bytes < 1024) return bytes+' B';
+  if(bytes < 1024*1024) return (bytes/1024).toFixed(0)+' KB';
+  return (bytes/1024/1024).toFixed(1)+' MB';
+}
+
+document.getElementById('btn-enviar-doc').addEventListener('click', async ()=>{
+  const msg = document.getElementById('msg-doc');
+  const empresaId = document.getElementById('doc-empresa').value;
+  const nome = document.getElementById('doc-nome').value.trim();
+  const inputArquivo = document.getElementById('doc-arquivo');
+  const arquivo = inputArquivo.files[0];
+  const empresa = empresas.find(e=>e.id===empresaId);
+
+  if(!empresa){ msg.className='msg err'; msg.textContent='Selecione a empresa.'; return; }
+  if(!nome){ msg.className='msg err'; msg.textContent='Informe o nome/descrição do documento.'; return; }
+  if(!arquivo){ msg.className='msg err'; msg.textContent='Selecione um arquivo.'; return; }
+  if(arquivo.size > LIMITE_TAMANHO_DOC){
+    msg.className='msg err'; msg.textContent=`Arquivo muito grande (${fmtTamanho(arquivo.size)}). Limite: ${fmtTamanho(LIMITE_TAMANHO_DOC)}.`;
+    return;
+  }
+
+  msg.className='msg'; msg.textContent='Enviando...';
+  try{
+    const base64 = await arquivoParaBase64(arquivo);
+    const metaRef = await addDoc(collection(db,'documentos'), {
+      empresaId, empresaNome:empresa.nome, nome, nomeArquivo:arquivo.name, tipoArquivo:arquivo.type,
+      tamanho:arquivo.size, userId: usuarioAtual.uid, createdAt: Date.now()
+    });
+    await setDoc(doc(db,'documentosConteudo',metaRef.id), { dataBase64: base64, userId: usuarioAtual.uid });
+    documentos.push({ id:metaRef.id, empresaId, empresaNome:empresa.nome, nome, nomeArquivo:arquivo.name, tipoArquivo:arquivo.type, tamanho:arquivo.size });
+    msg.className='msg ok'; msg.textContent='Documento enviado com sucesso.';
+    document.getElementById('doc-nome').value='';
+    inputArquivo.value='';
+    renderDocumentos();
+  }catch(err){ msg.className='msg err'; msg.textContent='Erro ao enviar: '+err.message; }
+});
+
+function renderDocumentos(){
+  const container = document.getElementById('documentos-container');
+  const q = (document.getElementById('busca-doc').value||'').toLowerCase();
+
+  const porEmpresa = {};
+  const ordemEmpresas = [];
+  documentos.forEach(d=>{
+    if(!porEmpresa[d.empresaNome]){ porEmpresa[d.empresaNome] = []; ordemEmpresas.push(d.empresaNome); }
+    porEmpresa[d.empresaNome].push(d);
+  });
+
+  const empresasFiltradas = ordemEmpresas.filter(nome=>{
+    if(!q) return true;
+    if(nome.toLowerCase().includes(q)) return true;
+    return porEmpresa[nome].some(d=>d.nome.toLowerCase().includes(q));
+  });
+
+  if(empresasFiltradas.length===0){
+    container.innerHTML = `<div class="empty">Nenhum documento cadastrado ainda.</div>`;
+    return;
+  }
+
+  container.innerHTML = empresasFiltradas.map((nomeEmpresa, idx)=>{
+    const docsEmpresa = porEmpresa[nomeEmpresa].filter(d=>!q || nomeEmpresa.toLowerCase().includes(q) || d.nome.toLowerCase().includes(q));
+    const containerId = 'doc-empresa-'+idx;
+    const abrirPorBusca = q.length>0;
+    const linhas = docsEmpresa.map(d=>`
+      <div class="doc-item">
+        <div class="doc-info">
+          <div class="doc-nome">${d.nome}</div>
+          <div class="doc-meta">${d.nomeArquivo} • ${fmtTamanho(d.tamanho)}</div>
+        </div>
+        <div class="doc-acoes">
+          <button class="btn-link" onclick="abrirDocumento('${d.id}')">Abrir</button>
+          <button class="btn-link" onclick="baixarDocumento('${d.id}')">Baixar</button>
+          <button class="btn-link" onclick="editarDocumento('${d.id}')">Editar</button>
+          <button class="danger" onclick="removerDocumento('${d.id}')">Excluir</button>
+        </div>
+      </div>`).join('');
+
+    return `<div class="grupo-empresa">
+      <div class="empresa-header" onclick="document.getElementById('${containerId}').classList.toggle('hidden'); this.querySelector('.seta').classList.toggle('aberta')">
+        <div class="info">
+          <span class="seta ${abrirPorBusca?'aberta':''}">▶</span>
+          <span class="empresa-nome">${nomeEmpresa}</span>
+          <span class="muted-info">${docsEmpresa.length} documento(s)</span>
+        </div>
+      </div>
+      <div class="empresa-conteudo ${abrirPorBusca?'':'hidden'}" id="${containerId}">${linhas}</div>
+    </div>`;
+  }).join('');
+}
+document.getElementById('busca-doc').addEventListener('input', renderDocumentos);
+
+async function buscarConteudoDocumento(id){
+  const snap = await getDoc(doc(db,'documentosConteudo',id));
+  if(!snap.exists()) throw new Error('Conteúdo do arquivo não encontrado.');
+  return snap.data().dataBase64;
+}
+
+window.abrirDocumento = async function(id){
+  try{
+    const base64 = await buscarConteudoDocumento(id);
+    window.open(base64, '_blank');
+  }catch(err){ alert('Erro ao abrir: '+err.message); }
+};
+
+window.baixarDocumento = async function(id){
+  const d = documentos.find(x=>x.id===id);
+  if(!d) return;
+  try{
+    const base64 = await buscarConteudoDocumento(id);
+    const a = document.createElement('a');
+    a.href = base64; a.download = d.nomeArquivo;
+    document.body.appendChild(a); a.click(); a.remove();
+  }catch(err){ alert('Erro ao baixar: '+err.message); }
+};
+
+window.editarDocumento = async function(id){
+  const d = documentos.find(x=>x.id===id);
+  if(!d) return;
+  const novoNome = prompt('Nome/descrição do documento:', d.nome);
+  if(novoNome===null || !novoNome.trim()) return;
+  try{
+    await updateDoc(doc(db,'documentos',id), { nome: novoNome.trim() });
+    d.nome = novoNome.trim();
+    renderDocumentos();
+  }catch(err){ alert('Erro ao editar: '+err.message); }
+};
+
+window.removerDocumento = async function(id){
+  if(!confirm('Excluir este documento?')) return;
+  try{
+    await deleteDoc(doc(db,'documentos',id));
+    await deleteDoc(doc(db,'documentosConteudo',id));
+  }catch(err){ alert('Erro ao excluir: '+err.message); return; }
+  documentos = documentos.filter(d=>d.id!==id);
+  renderDocumentos();
 };
 
 // init

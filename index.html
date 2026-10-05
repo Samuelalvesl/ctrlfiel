@@ -9,7 +9,7 @@
 <style>
 :root{
   --bg:#0f1720; --panel:#16212c; --panel2:#1c2a37; --line:#2a3b49;
-  --text:#e7edf3; --muted:#8fa3b3; --accent:#3d8f6f; --accent2:#c9924f;
+  --text:#e7edf3; --muted:#8fa3b3; --accent:#3d8f6f; --accent2:#c9924f; --tab-active:#2f6fed;
   --danger:#c05a5a; --ok:#3d8f6f;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -39,7 +39,7 @@ nav button{
   background:var(--panel); border:1px solid var(--line); color:var(--muted);
   padding:9px 14px; border-radius:7px; cursor:pointer; font-size:.85rem; font-weight:600;
 }
-nav button.active{background:var(--accent); color:#fff; border-color:var(--accent)}
+nav button.active{background:var(--tab-active); color:#fff; border-color:var(--tab-active)}
 main{padding:16px 20px 60px; max-width:1100px; margin:0 auto}
 .card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:16px}
 .card h2{margin:0 0 14px; font-size:1.05rem}
@@ -78,7 +78,7 @@ button.danger{background:transparent; color:var(--danger); border:1px solid var(
 .empresa-header .totais span strong{display:block; font-size:.95rem}
 .empresa-conteudo{padding:12px; background:var(--bg)}
 .subnav-btn{background:var(--panel); border:1px solid var(--line); color:var(--muted); padding:9px 16px; border-radius:7px; cursor:pointer; font-weight:600; font-size:.85rem}
-.subnav-btn.active{background:var(--accent); color:#fff; border-color:var(--accent)}
+.subnav-btn.active{background:var(--tab-active); color:#fff; border-color:var(--tab-active)}
 .doc-item{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap}
 .doc-item:last-child{border-bottom:none}
 .doc-item .doc-info{font-size:.85rem}
@@ -387,6 +387,7 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
         <p style="color:var(--muted); font-size:.78rem; margin-top:-8px; margin-bottom:14px">Informe o email da pessoa. Ela só conseguirá criar a própria conta depois de autorizada aqui.</p>
         <div class="grid">
           <div class="field"><label>Email</label><input id="user-email-novo" type="email" placeholder="pessoa@exemplo.com"></div>
+          <div class="field"><label>Créditos iniciais (1 crédito = 1 dia de acesso)</label><input id="user-creditos-novo" type="number" min="0" step="1" placeholder="Ex: 30"></div>
         </div>
         <div class="actions">
           <button class="primary" id="btn-autorizar-usuario">Autorizar usuário</button>
@@ -395,9 +396,10 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
       </div>
       <div class="card">
         <h2>Usuários autorizados</h2>
+        <p style="color:var(--muted); font-size:.78rem; margin-top:-8px; margin-bottom:14px">1 crédito = 1 dia de acesso. O administrador tem acesso ilimitado e não consome créditos.</p>
         <div class="tablewrap">
           <table id="tbl-usuarios">
-            <thead><tr><th>Email</th><th>Perfil</th><th>Conta criada?</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Email</th><th>Perfil</th><th>Conta criada?</th><th>Créditos</th><th>Status</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -518,6 +520,28 @@ function mostrarLogin(){
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('app-wrap').classList.add('hidden');
 }
+async function aplicarDescontoDeCreditos(dados, docId){
+  // administrador tem acesso ilimitado: nunca consome créditos
+  if(dados.isAdmin) return dados;
+
+  const hoje = new Date().toISOString().slice(0,10);
+  if(dados.ultimoDescontoEm === hoje) return dados; // já descontou hoje
+
+  const creditosAtuais = Number(dados.creditos)||0;
+  const novosCreditos = Math.max(0, creditosAtuais - 1);
+  const novoStatus = novosCreditos <= 0 ? 'desativado' : dados.status;
+
+  await updateDoc(doc(db,'usuariosAutorizados',docId), { creditos:novosCreditos, ultimoDescontoEm:hoje, status:novoStatus });
+  dados.creditos = novosCreditos;
+  dados.ultimoDescontoEm = hoje;
+  dados.status = novoStatus;
+
+  if(novoStatus === 'desativado'){
+    throw new Error('Seus créditos de acesso acabaram. Entre em contato com o administrador para liberar mais créditos.');
+  }
+  return dados;
+}
+
 async function verificarOuInicializarAutorizacao(user){
   const emailLower = user.email.toLowerCase();
   const bootstrapRef = doc(db,'sistema','adminBootstrap');
@@ -528,13 +552,16 @@ async function verificarOuInicializarAutorizacao(user){
     const docRef = porUidSnap.docs[0];
     const dados = docRef.data();
     if(dados.status !== 'ativo'){
-      throw new Error('Seu acesso foi desativado. Entre em contato com o administrador.');
+      throw new Error(dados.isAdmin===false && Number(dados.creditos||0)<=0
+        ? 'Seus créditos de acesso acabaram. Entre em contato com o administrador para liberar mais créditos.'
+        : 'Seu acesso foi desativado. Entre em contato com o administrador.');
     }
     // mantém o campo "email" sincronizado caso o usuário tenha trocado de email de login
     if((dados.email||'').toLowerCase() !== emailLower){
       await updateDoc(doc(db,'usuariosAutorizados',docRef.id), { email: emailLower });
       dados.email = emailLower;
     }
+    await aplicarDescontoDeCreditos(dados, docRef.id);
     dados._docId = docRef.id;
     return dados;
   }
@@ -543,7 +570,7 @@ async function verificarOuInicializarAutorizacao(user){
   const autRef = doc(db,'usuariosAutorizados', emailLower);
   const bootstrapSnap = await getDoc(bootstrapRef);
   if(!bootstrapSnap.exists()){
-    // ninguém é administrador ainda: quem estiver entrando agora vira o primeiro admin
+    // ninguém é administrador ainda: quem estiver entrando agora vira o primeiro admin (sem créditos, acesso ilimitado)
     const dados = { email:emailLower, uid:user.uid, status:'ativo', isAdmin:true, criadoEm:Date.now(), ativadoEm:Date.now() };
     await setDoc(autRef, dados);
     await setDoc(bootstrapRef, { criadoEm:Date.now(), por:emailLower });
@@ -557,12 +584,15 @@ async function verificarOuInicializarAutorizacao(user){
   }
   const dados = autSnap.data();
   if(dados.status !== 'ativo'){
-    throw new Error('Seu acesso foi desativado. Entre em contato com o administrador.');
+    throw new Error(dados.isAdmin===false && Number(dados.creditos||0)<=0
+      ? 'Seus créditos de acesso acabaram. Entre em contato com o administrador para liberar mais créditos.'
+      : 'Seu acesso foi desativado. Entre em contato com o administrador.');
   }
   if(!dados.uid){
     await updateDoc(autRef, { uid:user.uid, ativadoEm:Date.now() });
     dados.uid = user.uid;
   }
+  await aplicarDescontoDeCreditos(dados, emailLower);
   dados._docId = emailLower;
   return dados;
 }
@@ -1812,12 +1842,16 @@ function renderUsuarios(){
   const tbody = document.querySelector('#tbl-usuarios tbody');
   if(!tbody) return;
   if(usuariosAutorizadosLista.length===0){
-    tbody.innerHTML = `<tr><td colspan="5" class="empty">Nenhum usuário autorizado ainda.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">Nenhum usuário autorizado ainda.</td></tr>`;
     return;
   }
   tbody.innerHTML = usuariosAutorizadosLista.map(u=>{
     const souEu = usuarioAtual && u.email === usuarioAtual.email.toLowerCase();
     const statusHtml = u.status==='ativo' ? `<span class="pill ok">Ativo</span>` : `<span class="pill off">Desativado</span>`;
+    const creditosHtml = u.isAdmin ? `<span class="muted-info">Ilimitado</span>` : `<strong>${Number(u.creditos)||0}</strong> dia(s)`;
+    const acoesCreditos = (!u.isAdmin) ? `
+      <input type="number" min="1" step="1" placeholder="Qtd" style="width:70px" id="add-cred-${u.docId}">
+      <button class="btn-link" onclick="adicionarCreditos('${u.docId}')">+ Adicionar</button>` : '';
     const acoes = souEu ? '-' : `
       <button class="btn-link" onclick="toggleStatusUsuario('${u.docId}')">${u.status==='ativo'?'Desativar':'Ativar'}</button>
       <button class="danger" onclick="excluirUsuario('${u.docId}')">Excluir Usuário</button>`;
@@ -1825,6 +1859,7 @@ function renderUsuarios(){
       <td>${u.email}${souEu?' (você)':''}</td>
       <td>${u.isAdmin?'Administrador':'Usuário'}</td>
       <td>${u.uid?'Sim':'Não'}</td>
+      <td>${creditosHtml}<div style="display:flex; gap:6px; margin-top:4px; align-items:center">${acoesCreditos}</div></td>
       <td>${statusHtml}</td>
       <td style="display:flex; gap:8px; flex-wrap:wrap">${acoes}</td>
     </tr>`;
@@ -1834,6 +1869,7 @@ function renderUsuarios(){
 document.getElementById('btn-autorizar-usuario').addEventListener('click', async ()=>{
   const msg = document.getElementById('msg-usuario');
   const emailNovo = document.getElementById('user-email-novo').value.trim().toLowerCase();
+  const creditosNovo = parseInt(document.getElementById('user-creditos-novo').value) || 0;
   if(!emailNovo || !emailNovo.includes('@')){ msg.className='msg err'; msg.textContent='Informe um email válido.'; return; }
 
   try{
@@ -1843,14 +1879,31 @@ document.getElementById('btn-autorizar-usuario').addEventListener('click', async
       await updateDoc(ref, { status:'ativo' });
       msg.className='msg ok'; msg.textContent='Usuário reativado com sucesso.';
     } else {
-      await setDoc(ref, { email:emailNovo, status:'ativo', isAdmin:false, autorizadoPor:usuarioAtual.email, criadoEm:Date.now() });
+      await setDoc(ref, { email:emailNovo, status:'ativo', isAdmin:false, creditos:creditosNovo, autorizadoPor:usuarioAtual.email, criadoEm:Date.now() });
       msg.className='msg ok'; msg.textContent='Usuário autorizado. Ele já pode criar a conta pelo sistema.';
     }
   }catch(err){ msg.className='msg err'; msg.textContent='Erro ao autorizar: '+err.message; return; }
 
   document.getElementById('user-email-novo').value='';
+  document.getElementById('user-creditos-novo').value='';
   carregarUsuarios();
 });
+
+window.adicionarCreditos = async function(docId){
+  const input = document.getElementById('add-cred-'+docId);
+  const qtd = parseInt(input.value);
+  if(!qtd || qtd<=0){ alert('Informe uma quantidade de créditos válida.'); return; }
+  const u = usuariosAutorizadosLista.find(x=>x.docId===docId);
+  if(!u) return;
+  const novosCreditos = (Number(u.creditos)||0) + qtd;
+  try{
+    // adicionar créditos sempre reativa o acesso automaticamente
+    await updateDoc(doc(db,'usuariosAutorizados',docId), { creditos:novosCreditos, status:'ativo' });
+    u.creditos = novosCreditos;
+    u.status = 'ativo';
+    renderUsuarios();
+  }catch(err){ alert('Erro ao adicionar créditos: '+err.message); }
+};
 
 window.toggleStatusUsuario = async function(docId){
   const u = usuariosAutorizadosLista.find(x=>x.docId===docId);

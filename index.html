@@ -379,6 +379,35 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
           </table>
         </div>
       </div>
+
+      <div class="card" id="card-om">
+        <h2>OM (Organização Militar)</h2>
+        <p style="color:var(--muted); font-size:.78rem; margin-top:-8px; margin-bottom:14px">Nome que aparece no cabeçalho do Pedido em PDF no lugar de "Colégio Naval". Se ficar vazio, será usado "Colégio Naval".</p>
+        <div class="grid">
+          <div class="field"><label>Nome da OM</label><input id="om-nome" placeholder="Colégio Naval"></div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="btn-salvar-om">Salvar OM</button>
+          <span id="msg-om"></span>
+        </div>
+      </div>
+
+      <div class="card" id="card-logo">
+        <h2>Logotipo (para o Pedido em PDF)</h2>
+        <p style="color:var(--muted); font-size:.78rem; margin-top:-8px; margin-bottom:14px">Imagem que ficará no canto superior esquerdo do pedido, em tamanho padrão de 3 cm × 3 cm. Por enquanto a imagem só fica salva; ela ainda não aparece no PDF (aguardando aprovação do modelo).</p>
+        <div class="grid">
+          <div class="field"><label>Arquivo da imagem (PNG ou JPG, até ~500KB)</label><input id="logo-arquivo" type="file" accept="image/png,image/jpeg"></div>
+        </div>
+        <div id="logo-preview-wrap" class="hidden" style="margin-top:12px">
+          <label>Logotipo atual</label>
+          <div style="margin-top:6px"><img id="logo-preview-img" alt="Logotipo" style="max-width:120px; max-height:120px; border:1px solid var(--line); border-radius:6px; background:#fff; padding:4px"></div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="btn-salvar-logo">Salvar logotipo</button>
+          <button class="danger hidden" id="btn-remover-logo" type="button">Remover logotipo</button>
+          <span id="msg-logo"></span>
+        </div>
+      </div>
     </div>
 
     <div id="subtab-usuarios" class="hidden">
@@ -496,6 +525,8 @@ let empresas = [];
 let assinaturas = [];
 let pedidos = [];
 let documentos = [];
+let configOM = '';
+let configLogo = '';
 
 async function carregarDados(){
   const uidAtual = usuarioAtual.uid;
@@ -513,6 +544,16 @@ async function carregarDados(){
   assinaturas = assinaturaSnap.docs.map(assinaturaFromDoc);
   pedidos = pedidoSnap.docs.map(pedidoFromDoc);
   documentos = docSnap.docs.map(documentoFromDoc);
+
+  // configurações globais do sistema (nome da OM e logotipo) — lidas por todos, editadas só pelo admin
+  try{
+    const omSnap = await getDoc(doc(db,'configuracoes','om'));
+    configOM = omSnap.exists() ? (omSnap.data().nome||'') : '';
+  }catch(e){ configOM = ''; }
+  try{
+    const logoSnap = await getDoc(doc(db,'configuracoes','logo'));
+    configLogo = logoSnap.exists() ? (logoSnap.data().dataBase64||'') : '';
+  }catch(e){ configLogo = ''; }
 }
 
 // ---- Login / Autenticação ----
@@ -520,16 +561,36 @@ function mostrarLogin(){
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('app-wrap').classList.add('hidden');
 }
+function diasEntre(dataAnteriorISO, dataAtualISO){
+  const a = new Date(dataAnteriorISO+'T00:00:00Z');
+  const b = new Date(dataAtualISO+'T00:00:00Z');
+  return Math.round((b-a)/86400000);
+}
+
+// Desconta créditos pela passagem real de dias corridos desde o último desconto registrado
+// (não depende do usuário ter feito login em cada dia). Pode ser chamada tanto pelo próprio
+// usuário (no login) quanto pelo administrador (ao abrir a lista de usuários), "pegando" os
+// dias que passaram sem precisar de um servidor rodando em segundo plano.
 async function aplicarDescontoDeCreditos(dados, docId){
   // administrador tem acesso ilimitado: nunca consome créditos
   if(dados.isAdmin) return dados;
-
+  // enquanto estiver pausado/desativado (pelo admin ou por falta de crédito), não desconta nada
+  if(dados.status !== 'ativo') return dados;
   const hoje = new Date().toISOString().slice(0,10);
-  if(dados.ultimoDescontoEm === hoje) return dados; // já descontou hoje
+
+  // usuário antigo, criado antes dessa regra existir: começa a contar a partir de hoje
+  if(!dados.ultimoDescontoEm){
+    await updateDoc(doc(db,'usuariosAutorizados',docId), { ultimoDescontoEm:hoje });
+    dados.ultimoDescontoEm = hoje;
+    return dados;
+  }
+
+  const dias = diasEntre(dados.ultimoDescontoEm, hoje);
+  if(dias <= 0) return dados; // mesmo dia, nada a fazer
 
   const creditosAtuais = Number(dados.creditos)||0;
-  const novosCreditos = Math.max(0, creditosAtuais - 1);
-  const novoStatus = novosCreditos <= 0 ? 'desativado' : dados.status;
+  const novosCreditos = Math.max(0, creditosAtuais - dias);
+  const novoStatus = novosCreditos <= 0 ? 'desativado' : 'ativo';
 
   await updateDoc(doc(db,'usuariosAutorizados',docId), { creditos:novosCreditos, ultimoDescontoEm:hoje, status:novoStatus });
   dados.creditos = novosCreditos;
@@ -1535,7 +1596,7 @@ function gerarPDFPedido(p){
   doc.text('MODELO DE PEDIDO DE MATERIAL', 297, y, {align:'center'}); y += 22;
 
   doc.setFontSize(11);
-  doc.text('COLÉGIO NAVAL', margemEsq, y);
+  doc.text((configOM && configOM.trim() ? configOM.trim() : 'Colégio Naval').toUpperCase(), margemEsq, y);
   doc.text(`Nº PEDIDO: ${p.numeroPedido}`, 555, y, {align:'right'}); y += 16;
   doc.text(p.empresaNome, margemEsq, y);
   doc.text(`DATA EMISSÃO: ${p.dataEmissao}`, 555, y, {align:'right'}); y += 16;
@@ -1831,12 +1892,65 @@ window.removerDocumento = async function(id){
 // ---- Configurações: Gerenciamento de Usuários (admin) ----
 function renderSubnavUsuarios(){
   const btn = document.getElementById('subnav-usuarios');
-  if(usuarioAutorizacao && usuarioAutorizacao.isAdmin){
-    btn.classList.remove('hidden');
+  const ehAdmin = !!(usuarioAutorizacao && usuarioAutorizacao.isAdmin);
+  btn.classList.toggle('hidden', !ehAdmin);
+  // OM e logotipo: só o administrador edita
+  document.getElementById('card-om').classList.toggle('hidden', !ehAdmin);
+  document.getElementById('card-logo').classList.toggle('hidden', !ehAdmin);
+  renderOMeLogo();
+}
+
+function renderOMeLogo(){
+  document.getElementById('om-nome').value = configOM || '';
+  const wrap = document.getElementById('logo-preview-wrap');
+  const img = document.getElementById('logo-preview-img');
+  const btnRemover = document.getElementById('btn-remover-logo');
+  if(configLogo){
+    img.src = configLogo;
+    wrap.classList.remove('hidden');
+    btnRemover.classList.remove('hidden');
   } else {
-    btn.classList.add('hidden');
+    wrap.classList.add('hidden');
+    btnRemover.classList.add('hidden');
   }
 }
+
+document.getElementById('btn-salvar-om').addEventListener('click', async ()=>{
+  const msg = document.getElementById('msg-om');
+  const nome = document.getElementById('om-nome').value.trim();
+  try{
+    await setDoc(doc(db,'configuracoes','om'), { nome, atualizadoPor:usuarioAtual.email, atualizadoEm:Date.now() });
+    configOM = nome;
+    msg.className='msg ok'; msg.textContent = nome ? 'Nome da OM salvo.' : 'Nome da OM removido (será usado "Colégio Naval").';
+  }catch(err){ msg.className='msg err'; msg.textContent='Erro ao salvar: '+err.message; }
+});
+
+const LIMITE_LOGO = 500*1024; // ~500KB (precisa caber no limite de 1MB do documento do Firestore, após conversão)
+document.getElementById('btn-salvar-logo').addEventListener('click', async ()=>{
+  const msg = document.getElementById('msg-logo');
+  const arquivo = document.getElementById('logo-arquivo').files[0];
+  if(!arquivo){ msg.className='msg err'; msg.textContent='Selecione uma imagem.'; return; }
+  if(!['image/png','image/jpeg'].includes(arquivo.type)){ msg.className='msg err'; msg.textContent='Use uma imagem PNG ou JPG.'; return; }
+  if(arquivo.size > LIMITE_LOGO){ msg.className='msg err'; msg.textContent=`Imagem muito grande (${fmtTamanho(arquivo.size)}). Limite: ${fmtTamanho(LIMITE_LOGO)}.`; return; }
+  try{
+    const base64 = await arquivoParaBase64(arquivo);
+    await setDoc(doc(db,'configuracoes','logo'), { dataBase64:base64, atualizadoPor:usuarioAtual.email, atualizadoEm:Date.now() });
+    configLogo = base64;
+    document.getElementById('logo-arquivo').value = '';
+    renderOMeLogo();
+    msg.className='msg ok'; msg.textContent='Logotipo salvo (ainda não aparece no PDF).';
+  }catch(err){ msg.className='msg err'; msg.textContent='Erro ao salvar: '+err.message; }
+});
+document.getElementById('btn-remover-logo').addEventListener('click', async ()=>{
+  const msg = document.getElementById('msg-logo');
+  if(!confirm('Remover o logotipo salvo?')) return;
+  try{
+    await deleteDoc(doc(db,'configuracoes','logo'));
+    configLogo = '';
+    renderOMeLogo();
+    msg.className='msg ok'; msg.textContent='Logotipo removido.';
+  }catch(err){ msg.className='msg err'; msg.textContent='Erro ao remover: '+err.message; }
+});
 
 let usuariosAutorizadosLista = [];
 
@@ -1848,8 +1962,16 @@ async function carregarUsuarios(){
     const snap = await getDocs(collection(db,'usuariosAutorizados'));
     usuariosAutorizadosLista = snap.docs.map(d=>({ docId:d.id, ...d.data() }));
   }catch(err){
-    tbody.innerHTML = `<tr><td colspan="5" class="empty">Erro ao carregar: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">Erro ao carregar: ${err.message}</td></tr>`;
     return;
+  }
+
+  // "acerta o relógio" de todos os usuários comuns ativos: desconta os dias que já passaram,
+  // mesmo que a pessoa não tenha feito login desde então
+  for(const u of usuariosAutorizadosLista){
+    if(u.isAdmin || u.status!=='ativo') continue;
+    try{ await aplicarDescontoDeCreditos(u, u.docId); }
+    catch(e){ /* ao zerar, a função lança o aviso de "créditos acabaram"; o efeito (status desativado salvo) já foi aplicado */ }
   }
   renderUsuarios();
 }
@@ -1896,7 +2018,8 @@ document.getElementById('btn-autorizar-usuario').addEventListener('click', async
       await updateDoc(ref, { status:'ativo' });
       msg.className='msg ok'; msg.textContent='Usuário reativado com sucesso.';
     } else {
-      await setDoc(ref, { email:emailNovo, status:'ativo', isAdmin:false, creditos:creditosNovo, autorizadoPor:usuarioAtual.email, criadoEm:Date.now() });
+      await setDoc(ref, { email:emailNovo, status:'ativo', isAdmin:false, creditos:creditosNovo,
+        ultimoDescontoEm: new Date().toISOString().slice(0,10), autorizadoPor:usuarioAtual.email, criadoEm:Date.now() });
       msg.className='msg ok'; msg.textContent='Usuário autorizado. Ele já pode criar a conta pelo sistema.';
     }
   }catch(err){ msg.className='msg err'; msg.textContent='Erro ao autorizar: '+err.message; return; }
@@ -1913,11 +2036,14 @@ window.adicionarCreditos = async function(docId){
   const u = usuariosAutorizadosLista.find(x=>x.docId===docId);
   if(!u) return;
   const novosCreditos = (Number(u.creditos)||0) + qtd;
+  const hoje = new Date().toISOString().slice(0,10);
   try{
-    // adicionar créditos sempre reativa o acesso automaticamente
-    await updateDoc(doc(db,'usuariosAutorizados',docId), { creditos:novosCreditos, status:'ativo' });
+    // adicionar créditos sempre reativa o acesso automaticamente e "zera o relógio" a partir de hoje
+    // (o tempo que ficou pausado/desativado não é cobrado)
+    await updateDoc(doc(db,'usuariosAutorizados',docId), { creditos:novosCreditos, status:'ativo', ultimoDescontoEm:hoje });
     u.creditos = novosCreditos;
     u.status = 'ativo';
+    u.ultimoDescontoEm = hoje;
     renderUsuarios();
   }catch(err){ alert('Erro ao adicionar créditos: '+err.message); }
 };
@@ -1925,11 +2051,24 @@ window.adicionarCreditos = async function(docId){
 window.toggleStatusUsuario = async function(docId){
   const u = usuariosAutorizadosLista.find(x=>x.docId===docId);
   if(!u) return;
-  const novoStatus = u.status==='ativo' ? 'desativado' : 'ativo';
-  if(!confirm(`${novoStatus==='ativo'?'Ativar':'Desativar'} o acesso de ${u.email}?`)) return;
+  const vaiDesativar = u.status==='ativo';
+  if(!confirm(`${vaiDesativar?'Desativar':'Ativar'} o acesso de ${u.email}?`)) return;
+  const hoje = new Date().toISOString().slice(0,10);
   try{
-    await updateDoc(doc(db,'usuariosAutorizados',docId), { status:novoStatus });
-    u.status = novoStatus;
+    if(vaiDesativar && !u.isAdmin){
+      // acerta os créditos até hoje antes de pausar, para o período desativado não ser descontado depois
+      await aplicarDescontoDeCreditos(u, docId).catch(()=>{}); // pode "lançar" ao zerar os créditos; aqui só queremos o efeito colateral de salvar
+      await updateDoc(doc(db,'usuariosAutorizados',docId), { status:'desativado' });
+      u.status = 'desativado';
+    } else if(!vaiDesativar && !u.isAdmin){
+      // reativando manualmente: zera o relógio a partir de hoje (o período pausado não é cobrado)
+      await updateDoc(doc(db,'usuariosAutorizados',docId), { status:'ativo', ultimoDescontoEm:hoje });
+      u.status = 'ativo';
+      u.ultimoDescontoEm = hoje;
+    } else {
+      await updateDoc(doc(db,'usuariosAutorizados',docId), { status: vaiDesativar?'desativado':'ativo' });
+      u.status = vaiDesativar?'desativado':'ativo';
+    }
     renderUsuarios();
   }catch(err){ alert('Erro ao atualizar: '+err.message); }
 };

@@ -148,10 +148,31 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
     </div>
     <div style="text-align:right">
       <div id="user-email"></div>
+      <button id="btn-perfil" type="button">👤 Perfil</button>
       <button id="btn-sair" type="button">Sair</button>
     </div>
   </div>
 </header>
+
+<div id="perfil-modal" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:50; display:flex; align-items:center; justify-content:center; padding:20px">
+  <div class="card" style="max-width:420px; width:100%; margin:0; max-height:90vh; overflow-y:auto">
+    <h2>Meu Perfil</h2>
+    <p style="color:var(--muted); font-size:.82rem; margin-top:-8px">Email atual: <b id="perfil-email-atual"></b></p>
+
+    <div class="field" style="margin-top:14px"><label>Senha atual (necessária para qualquer alteração)</label><input id="perfil-senha-atual" type="password" placeholder="Digite sua senha atual"></div>
+
+    <hr style="border-color:var(--line); margin:16px 0">
+    <div class="field"><label>Novo email</label><input id="perfil-novo-email" type="email" placeholder="novo@email.com"></div>
+    <div class="actions"><button class="primary" id="btn-atualizar-email">Atualizar email</button></div>
+
+    <hr style="border-color:var(--line); margin:16px 0">
+    <div class="field"><label>Nova senha</label><input id="perfil-nova-senha" type="password" placeholder="Mínimo 6 caracteres"></div>
+    <div class="actions"><button class="primary" id="btn-atualizar-senha">Atualizar senha</button></div>
+
+    <div id="msg-perfil" style="margin-top:12px"></div>
+    <div class="actions" style="margin-top:16px"><button id="btn-fechar-perfil" type="button">Fechar</button></div>
+  </div>
+</div>
 
 <nav>
   <button data-tab="cadastro" class="active">Cadastrar Empenho</button>
@@ -391,7 +412,8 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  onAuthStateChanged, signOut
+  onAuthStateChanged, signOut, reauthenticateWithCredential, EmailAuthProvider,
+  updateEmail, updatePassword
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
   getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, getDocs, query, where, writeBatch
@@ -498,15 +520,34 @@ function mostrarLogin(){
 }
 async function verificarOuInicializarAutorizacao(user){
   const emailLower = user.email.toLowerCase();
-  const autRef = doc(db,'usuariosAutorizados', emailLower);
   const bootstrapRef = doc(db,'sistema','adminBootstrap');
 
+  // tenta localizar o registro de autorização pelo UID (estável mesmo após trocar de email)
+  const porUidSnap = await getDocs(query(collection(db,'usuariosAutorizados'), where('uid','==',user.uid)));
+  if(!porUidSnap.empty){
+    const docRef = porUidSnap.docs[0];
+    const dados = docRef.data();
+    if(dados.status !== 'ativo'){
+      throw new Error('Seu acesso foi desativado. Entre em contato com o administrador.');
+    }
+    // mantém o campo "email" sincronizado caso o usuário tenha trocado de email de login
+    if((dados.email||'').toLowerCase() !== emailLower){
+      await updateDoc(doc(db,'usuariosAutorizados',docRef.id), { email: emailLower });
+      dados.email = emailLower;
+    }
+    dados._docId = docRef.id;
+    return dados;
+  }
+
+  // ainda não vinculado a nenhum uid: primeiro acesso dessa conta
+  const autRef = doc(db,'usuariosAutorizados', emailLower);
   const bootstrapSnap = await getDoc(bootstrapRef);
   if(!bootstrapSnap.exists()){
     // ninguém é administrador ainda: quem estiver entrando agora vira o primeiro admin
     const dados = { email:emailLower, uid:user.uid, status:'ativo', isAdmin:true, criadoEm:Date.now(), ativadoEm:Date.now() };
     await setDoc(autRef, dados);
     await setDoc(bootstrapRef, { criadoEm:Date.now(), por:emailLower });
+    dados._docId = emailLower;
     return dados;
   }
 
@@ -522,6 +563,7 @@ async function verificarOuInicializarAutorizacao(user){
     await updateDoc(autRef, { uid:user.uid, ativadoEm:Date.now() });
     dados.uid = user.uid;
   }
+  dados._docId = emailLower;
   return dados;
 }
 
@@ -586,6 +628,67 @@ document.getElementById('btn-sair').addEventListener('click', async ()=>{
   usuarioAtual = null;
   usuarioAutorizacao = null;
   mostrarLogin();
+});
+
+// ---- Perfil (trocar email / senha) ----
+function perfilMsg(texto, ok){
+  const msg = document.getElementById('msg-perfil');
+  msg.className = 'msg ' + (ok?'ok':'err');
+  msg.textContent = texto;
+}
+function limparCamposPerfil(){
+  ['perfil-senha-atual','perfil-novo-email','perfil-nova-senha'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('msg-perfil').className=''; document.getElementById('msg-perfil').textContent='';
+}
+document.getElementById('btn-perfil').addEventListener('click', ()=>{
+  document.getElementById('perfil-email-atual').textContent = usuarioAtual.email;
+  limparCamposPerfil();
+  document.getElementById('perfil-modal').classList.remove('hidden');
+});
+document.getElementById('btn-fechar-perfil').addEventListener('click', ()=>{
+  document.getElementById('perfil-modal').classList.add('hidden');
+});
+
+async function reautenticar(){
+  const senhaAtual = document.getElementById('perfil-senha-atual').value;
+  if(!senhaAtual){ perfilMsg('Informe sua senha atual para confirmar a alteração.', false); return null; }
+  try{
+    const cred = EmailAuthProvider.credential(usuarioAtual.email, senhaAtual);
+    await reauthenticateWithCredential(auth.currentUser, cred);
+    return true;
+  }catch(err){
+    perfilMsg('Senha atual incorreta: '+traduzErroFirebase(err), false);
+    return null;
+  }
+}
+
+document.getElementById('btn-atualizar-email').addEventListener('click', async ()=>{
+  const novoEmail = document.getElementById('perfil-novo-email').value.trim();
+  if(!novoEmail || !novoEmail.includes('@')){ perfilMsg('Informe um novo email válido.', false); return; }
+  if(!(await reautenticar())) return;
+  try{
+    await updateEmail(auth.currentUser, novoEmail);
+    const novoEmailLower = novoEmail.toLowerCase();
+    await updateDoc(doc(db,'usuariosAutorizados', usuarioAutorizacao._docId), { email: novoEmailLower });
+    usuarioAutorizacao.email = novoEmailLower;
+    usuarioAtual = auth.currentUser;
+    document.getElementById('user-email').textContent = usuarioAtual.email + (usuarioAutorizacao.isAdmin ? ' (admin)' : '');
+    document.getElementById('perfil-email-atual').textContent = usuarioAtual.email;
+    perfilMsg('Email atualizado com sucesso! Use o novo email para entrar nas próximas vezes.', true);
+    document.getElementById('perfil-novo-email').value='';
+  }catch(err){ perfilMsg('Erro ao atualizar email: '+traduzErroFirebase(err), false); }
+});
+
+document.getElementById('btn-atualizar-senha').addEventListener('click', async ()=>{
+  const novaSenha = document.getElementById('perfil-nova-senha').value;
+  if(!novaSenha || novaSenha.length<6){ perfilMsg('A nova senha deve ter ao menos 6 caracteres.', false); return; }
+  if(!(await reautenticar())) return;
+  try{
+    await updatePassword(auth.currentUser, novaSenha);
+    perfilMsg('Senha atualizada com sucesso!', true);
+    document.getElementById('perfil-nova-senha').value='';
+    document.getElementById('perfil-senha-atual').value='';
+  }catch(err){ perfilMsg('Erro ao atualizar senha: '+traduzErroFirebase(err), false); }
 });
 function traduzErroFirebase(err){
   const c = err.code||'';
@@ -926,7 +1029,9 @@ function renderEmpresas(){
 
   const tbody = document.querySelector('#tbl-empresas tbody');
   const q = (document.getElementById('busca-empresa').value||'').toLowerCase();
-  const rows = empresas.filter(e => !q || e.nome.toLowerCase().includes(q) || (e.cnpj||'').toLowerCase().includes(q));
+  const rows = empresas
+    .filter(e => !q || e.nome.toLowerCase().includes(q) || (e.cnpj||'').toLowerCase().includes(q))
+    .sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR',{sensitivity:'base'}));
   if(rows.length===0){
     tbody.innerHTML = `<tr><td colspan="6" class="empty">Nenhuma empresa cadastrada ainda.</td></tr>`;
     return;
@@ -1695,7 +1800,7 @@ async function carregarUsuarios(){
   tbody.innerHTML = `<tr><td colspan="5" class="empty">Carregando...</td></tr>`;
   try{
     const snap = await getDocs(collection(db,'usuariosAutorizados'));
-    usuariosAutorizadosLista = snap.docs.map(d=>({ email:d.id, ...d.data() }));
+    usuariosAutorizadosLista = snap.docs.map(d=>({ docId:d.id, ...d.data() }));
   }catch(err){
     tbody.innerHTML = `<tr><td colspan="5" class="empty">Erro ao carregar: ${err.message}</td></tr>`;
     return;
@@ -1713,13 +1818,15 @@ function renderUsuarios(){
   tbody.innerHTML = usuariosAutorizadosLista.map(u=>{
     const souEu = usuarioAtual && u.email === usuarioAtual.email.toLowerCase();
     const statusHtml = u.status==='ativo' ? `<span class="pill ok">Ativo</span>` : `<span class="pill off">Desativado</span>`;
-    const acao = souEu ? '-' : `<button class="btn-link" onclick="toggleStatusUsuario('${u.email}')">${u.status==='ativo'?'Desativar':'Ativar'}</button>`;
+    const acoes = souEu ? '-' : `
+      <button class="btn-link" onclick="toggleStatusUsuario('${u.docId}')">${u.status==='ativo'?'Desativar':'Ativar'}</button>
+      <button class="danger" onclick="excluirUsuario('${u.docId}')">Excluir Usuário</button>`;
     return `<tr>
       <td>${u.email}${souEu?' (você)':''}</td>
       <td>${u.isAdmin?'Administrador':'Usuário'}</td>
       <td>${u.uid?'Sim':'Não'}</td>
       <td>${statusHtml}</td>
-      <td>${acao}</td>
+      <td style="display:flex; gap:8px; flex-wrap:wrap">${acoes}</td>
     </tr>`;
   }).join('');
 }
@@ -1745,16 +1852,27 @@ document.getElementById('btn-autorizar-usuario').addEventListener('click', async
   carregarUsuarios();
 });
 
-window.toggleStatusUsuario = async function(email){
-  const u = usuariosAutorizadosLista.find(x=>x.email===email);
+window.toggleStatusUsuario = async function(docId){
+  const u = usuariosAutorizadosLista.find(x=>x.docId===docId);
   if(!u) return;
   const novoStatus = u.status==='ativo' ? 'desativado' : 'ativo';
-  if(!confirm(`${novoStatus==='ativo'?'Ativar':'Desativar'} o acesso de ${email}?`)) return;
+  if(!confirm(`${novoStatus==='ativo'?'Ativar':'Desativar'} o acesso de ${u.email}?`)) return;
   try{
-    await updateDoc(doc(db,'usuariosAutorizados',email), { status:novoStatus });
+    await updateDoc(doc(db,'usuariosAutorizados',docId), { status:novoStatus });
     u.status = novoStatus;
     renderUsuarios();
   }catch(err){ alert('Erro ao atualizar: '+err.message); }
+};
+
+window.excluirUsuario = async function(docId){
+  const u = usuariosAutorizadosLista.find(x=>x.docId===docId);
+  if(!u) return;
+  if(!confirm(`Tem certeza que deseja excluir o usuário "${u.email}"? Isso remove o acesso dele ao sistema imediatamente. Essa ação não pode ser desfeita.`)) return;
+  try{
+    await deleteDoc(doc(db,'usuariosAutorizados',docId));
+  }catch(err){ alert('Erro ao excluir: '+err.message); return; }
+  usuariosAutorizadosLista = usuariosAutorizadosLista.filter(x=>x.docId!==docId);
+  renderUsuarios();
 };
 
 // init

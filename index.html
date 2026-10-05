@@ -605,7 +605,7 @@ async function mostrarApp(user){
     try{ await signOut(auth); }catch(e){}
     mostrarLogin();
     loginMsg(err.message, false);
-    return;
+    return false;
   }
 
   usuarioAtual = user;
@@ -622,6 +622,7 @@ async function mostrarApp(user){
   popularSelectEmpresaPedido(); popularSelectAssinaturas(); renderPedidos();
   popularSelectEmpresaDoc(); renderDocumentos();
   renderSubnavUsuarios();
+  return true;
 }
 function loginMsg(texto, ok){
   const msg = document.getElementById('login-msg');
@@ -630,7 +631,7 @@ function loginMsg(texto, ok){
 }
 document.getElementById('btn-entrar').addEventListener('click', async ()=>{
   if(!auth){ loginMsg('O sistema não inicializou corretamente. Recarregue a página.', false); return; }
-  const email = document.getElementById('login-email').value.trim();
+  const email = document.getElementById('login-email').value.trim().toLowerCase();
   const senha = document.getElementById('login-senha').value;
   if(!email || !senha){ loginMsg('Preencha email e senha.', false); return; }
   loginMsg('Entrando...', true);
@@ -643,14 +644,20 @@ document.getElementById('btn-entrar').addEventListener('click', async ()=>{
 });
 document.getElementById('btn-criar-conta').addEventListener('click', async ()=>{
   if(!auth){ loginMsg('O sistema não inicializou corretamente. Recarregue a página.', false); return; }
-  const email = document.getElementById('login-email').value.trim();
+  const email = document.getElementById('login-email').value.trim().toLowerCase();
   const senha = document.getElementById('login-senha').value;
   if(!email || !senha){ loginMsg('Preencha email e senha para criar a conta.', false); return; }
   if(senha.length<6){ loginMsg('A senha deve ter ao menos 6 caracteres.', false); return; }
+  let cred;
   try{
-    const cred = await createUserWithEmailAndPassword(auth, email, senha);
-    await mostrarApp(cred.user);
-  }catch(err){ loginMsg('Erro ao criar conta: '+traduzErroFirebase(err), false); }
+    cred = await createUserWithEmailAndPassword(auth, email, senha);
+  }catch(err){ loginMsg('Erro ao criar conta: '+traduzErroFirebase(err), false); return; }
+
+  const sucesso = await mostrarApp(cred.user);
+  if(!sucesso){
+    // não estava autorizado: desfaz a criação da conta para não bloquear uma futura tentativa com esse email
+    try{ await cred.user.delete(); }catch(e){ console.error('Não foi possível remover conta não autorizada:', e); }
+  }
 });
 document.getElementById('btn-sair').addEventListener('click', async ()=>{
   if(!auth) return;

@@ -418,7 +418,7 @@ import {
   updateEmail, updatePassword
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
-  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, getDocs, query, where, writeBatch
+  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, getDocs, query, where, writeBatch, deleteField
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
 
@@ -604,8 +604,16 @@ async function mostrarApp(user){
   }catch(err){
     try{ await signOut(auth); }catch(e){}
     mostrarLogin();
-    loginMsg(err.message, false);
-    return false;
+    // erros técnicos/de permissão (err.code existe, ex: "permission-denied") nunca devem apagar a conta —
+    // só os erros intencionais de autorização (lançados pelo próprio sistema, sem err.code) podem.
+    const ehNegacaoIntencional = !err.code;
+    if(ehNegacaoIntencional){
+      loginMsg(err.message, false);
+    } else {
+      console.error('Erro técnico ao verificar autorização:', err.code, err.message);
+      loginMsg('Erro técnico ao verificar seu acesso. Tente novamente em instantes. Se persistir, avise o administrador. ('+(err.code||err.message)+')', false);
+    }
+    return { sucesso:false, podeExcluirConta: ehNegacaoIntencional };
   }
 
   usuarioAtual = user;
@@ -622,7 +630,7 @@ async function mostrarApp(user){
   popularSelectEmpresaPedido(); popularSelectAssinaturas(); renderPedidos();
   popularSelectEmpresaDoc(); renderDocumentos();
   renderSubnavUsuarios();
-  return true;
+  return { sucesso:true };
 }
 function loginMsg(texto, ok){
   const msg = document.getElementById('login-msg');
@@ -653,11 +661,12 @@ document.getElementById('btn-criar-conta').addEventListener('click', async ()=>{
     cred = await createUserWithEmailAndPassword(auth, email, senha);
   }catch(err){ loginMsg('Erro ao criar conta: '+traduzErroFirebase(err), false); return; }
 
-  const sucesso = await mostrarApp(cred.user);
-  if(!sucesso){
-    // não estava autorizado: desfaz a criação da conta para não bloquear uma futura tentativa com esse email
+  const resultado = await mostrarApp(cred.user);
+  if(!resultado.sucesso && resultado.podeExcluirConta){
+    // não estava autorizado de fato: desfaz a criação da conta para não bloquear uma futura tentativa com esse email
     try{ await cred.user.delete(); }catch(e){ console.error('Não foi possível remover conta não autorizada:', e); }
   }
+  // em erros técnicos, a conta é mantida (só desconectada) para não perder o cadastro por uma falha passageira
 });
 document.getElementById('btn-sair').addEventListener('click', async ()=>{
   if(!auth) return;
@@ -1861,6 +1870,7 @@ function renderUsuarios(){
       <button class="btn-link" onclick="adicionarCreditos('${u.docId}')">+ Adicionar</button>` : '';
     const acoes = souEu ? '-' : `
       <button class="btn-link" onclick="toggleStatusUsuario('${u.docId}')">${u.status==='ativo'?'Desativar':'Ativar'}</button>
+      ${u.uid && !u.isAdmin ? `<button class="btn-link" onclick="limparVinculoUsuario('${u.docId}')" title="Use se a conta foi apagada por engano e a pessoa não consegue mais se cadastrar">Limpar vínculo</button>` : ''}
       <button class="danger" onclick="excluirUsuario('${u.docId}')">Excluir Usuário</button>`;
     return `<tr>
       <td>${u.email}${souEu?' (você)':''}</td>
@@ -1933,6 +1943,18 @@ window.excluirUsuario = async function(docId){
   }catch(err){ alert('Erro ao excluir: '+err.message); return; }
   usuariosAutorizadosLista = usuariosAutorizadosLista.filter(x=>x.docId!==docId);
   renderUsuarios();
+};
+
+window.limparVinculoUsuario = async function(docId){
+  const u = usuariosAutorizadosLista.find(x=>x.docId===docId);
+  if(!u) return;
+  if(!confirm(`Limpar o vínculo de conta de "${u.email}"? Use isso só se a pessoa não consegue mais criar/acessar a conta (ex: a conta de login dela foi apagada por engano em algum problema anterior). Depois disso, ela poderá criar a conta de novo do zero com o mesmo email, mantendo os créditos e o status atuais.`)) return;
+  try{
+    await updateDoc(doc(db,'usuariosAutorizados',docId), { uid: deleteField(), ativadoEm: deleteField() });
+  }catch(err){ alert('Erro ao limpar vínculo: '+err.message); return; }
+  delete u.uid; delete u.ativadoEm;
+  renderUsuarios();
+  alert(`Vínculo removido. Avise "${u.email}" que já pode tentar "Criar conta" novamente com o mesmo email.`);
 };
 
 // init

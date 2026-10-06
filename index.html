@@ -394,7 +394,7 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
 
       <div class="card" id="card-logo">
         <h2>Logotipo (para o Pedido em PDF)</h2>
-        <p style="color:var(--muted); font-size:.78rem; margin-top:-8px; margin-bottom:14px">Imagem que ficará no canto superior esquerdo do pedido, em tamanho padrão de 3 cm × 3 cm. Por enquanto a imagem só fica salva; ela ainda não aparece no PDF (aguardando aprovação do modelo).</p>
+        <p style="color:var(--muted); font-size:.78rem; margin-top:-8px; margin-bottom:14px">Imagem que aparece no canto superior esquerdo do Pedido em PDF, acima do nome da OM, dentro de 3 cm × 3 cm (a proporção da imagem é mantida). Sem logotipo salvo, o pedido sai com o cabeçalho compacto de sempre.</p>
         <div class="grid">
           <div class="field"><label>Arquivo da imagem (PNG ou JPG, até ~500KB)</label><input id="logo-arquivo" type="file" accept="image/png,image/jpeg"></div>
         </div>
@@ -1593,7 +1593,23 @@ function gerarPDFPedido(p){
   let y = 45;
 
   doc.setFont('helvetica','bold'); doc.setFontSize(13);
-  doc.text('MODELO DE PEDIDO DE MATERIAL', 297, y, {align:'center'}); y += 22;
+  doc.text('MODELO DE PEDIDO DE MATERIAL', 297, y, {align:'center'});
+
+  // logotipo 3 cm x 3 cm (85,04 pt) no canto superior esquerdo, acima do nome da OM
+  let logoDesenhado = false;
+  if(configLogo){
+    try{
+      const LADO = 85.04; // 3 cm
+      const formato = configLogo.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+      const props = doc.getImageProperties(configLogo);
+      const escala = Math.min(LADO/props.width, LADO/props.height); // mantém a proporção dentro de 3x3 cm
+      const w = props.width*escala, h = props.height*escala;
+      doc.addImage(configLogo, formato, margemEsq, 30 + (LADO-h), w, h);
+      logoDesenhado = true;
+    }catch(e){ console.error('Não foi possível inserir o logotipo no PDF:', e); }
+  }
+  // com logotipo: o bloco do cabeçalho começa abaixo dele; sem logotipo: posição compacta de antes
+  y = logoDesenhado ? 131 : y + 22;
 
   doc.setFontSize(11);
   doc.text((configOM && configOM.trim() ? configOM.trim() : 'Colégio Naval').toUpperCase(), margemEsq, y);
@@ -1938,7 +1954,7 @@ document.getElementById('btn-salvar-logo').addEventListener('click', async ()=>{
     configLogo = base64;
     document.getElementById('logo-arquivo').value = '';
     renderOMeLogo();
-    msg.className='msg ok'; msg.textContent='Logotipo salvo (ainda não aparece no PDF).';
+    msg.className='msg ok'; msg.textContent='Logotipo salvo. Os próximos pedidos em PDF já saem com ele.';
   }catch(err){ msg.className='msg err'; msg.textContent='Erro ao salvar: '+err.message; }
 });
 document.getElementById('btn-remover-logo').addEventListener('click', async ()=>{

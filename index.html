@@ -40,6 +40,10 @@ nav button{
   padding:9px 14px; border-radius:7px; cursor:pointer; font-size:.85rem; font-weight:600;
 }
 nav button.active{background:var(--tab-active); color:#fff; border-color:var(--tab-active)}
+#submenu{display:flex; gap:6px; padding:10px 20px 0; flex-wrap:wrap}
+#submenu .submenu-grupo{display:flex; gap:6px; flex-wrap:wrap}
+.submenu-btn{background:transparent; border:1px solid var(--line); color:var(--muted); padding:7px 14px; border-radius:7px; cursor:pointer; font-size:.82rem; font-weight:600}
+.submenu-btn.active{background:var(--panel); color:var(--tab-active); border-color:var(--tab-active)}
 main{padding:16px 20px 60px; max-width:1100px; margin:0 auto}
 .card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:16px}
 .card h2{margin:0 0 14px; font-size:1.05rem}
@@ -208,14 +212,25 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
 </div>
 
 <nav>
-  <button data-tab="cadastro" class="active">Cadastrar Empenho</button>
-  <button data-tab="saldos">Saldos de Empenho</button>
-  <button data-tab="baixa">Registrar Nota Fiscal</button>
-  <button data-tab="historico">Histórico de NFs</button>
-  <button data-tab="pedidos">Pedidos</button>
-  <button data-tab="documentos">Documentos</button>
-  <button data-tab="config">Configurações</button>
+  <button data-grupo="empenho" class="active">Empenho</button>
+  <button data-grupo="controle">Controle</button>
+  <button data-grupo="pedidos">Pedidos</button>
+  <button data-grupo="config">Configurações</button>
 </nav>
+<div id="submenu">
+  <div class="submenu-grupo" data-grupo="empenho">
+    <button class="submenu-btn active" data-tab="cadastro" type="button">Cadastrar Empenho</button>
+    <button class="submenu-btn" data-tab="saldos" type="button">Saldo de Empenho</button>
+  </div>
+  <div class="submenu-grupo hidden" data-grupo="controle">
+    <button class="submenu-btn active" data-tab="baixa" type="button">Registrar Nota Fiscal</button>
+    <button class="submenu-btn" data-tab="historico" type="button">Histórico de NFs</button>
+  </div>
+  <div class="submenu-grupo hidden" data-grupo="pedidos">
+    <button class="submenu-btn active" data-tab="pedidos" type="button">Novo Pedido de Gêneros</button>
+    <button class="submenu-btn" data-tab="documentos" type="button">Documentos</button>
+  </div>
+</div>
 
 <main>
 
@@ -867,19 +882,31 @@ if(auth){
 
 // ---- Tabs ----
 
+// Menu principal (4 grupos) + submenu da área. As telas (#tab-*) continuam as mesmas de antes.
+function abrirTela(tab){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.add('hidden'));
+  document.getElementById('tab-'+tab).classList.remove('hidden');
+  if(tab==='saldos') renderSaldos();
+  if(tab==='baixa') renderSelectNE();
+  if(tab==='historico') renderHistorico();
+  if(tab==='config') { renderEmpresas(); renderAssinaturas(); }
+  if(tab==='pedidos') { popularSelectEmpresaPedido(); popularSelectAssinaturas(); renderPedidos(); }
+  if(tab==='documentos') { popularSelectEmpresaDoc(); renderDocumentos(); }
+}
+function abrirGrupo(grupo, tab){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.grupo===grupo));
+  document.querySelectorAll('#submenu .submenu-grupo').forEach(g=>g.classList.toggle('hidden', g.dataset.grupo!==grupo));
+  if(grupo==='config'){ abrirTela('config'); return; }
+  const grupoEl = document.querySelector('#submenu .submenu-grupo[data-grupo="'+grupo+'"]');
+  const alvo = tab || (grupoEl.querySelector('.submenu-btn.active') || grupoEl.querySelector('.submenu-btn')).dataset.tab;
+  grupoEl.querySelectorAll('.submenu-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===alvo));
+  abrirTela(alvo);
+}
 document.querySelectorAll('nav button').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.tab').forEach(t=>t.classList.add('hidden'));
-    document.getElementById('tab-'+btn.dataset.tab).classList.remove('hidden');
-    if(btn.dataset.tab==='saldos') renderSaldos();
-    if(btn.dataset.tab==='baixa') renderSelectNE();
-    if(btn.dataset.tab==='historico') renderHistorico();
-    if(btn.dataset.tab==='config') { renderEmpresas(); renderAssinaturas(); }
-    if(btn.dataset.tab==='pedidos') { popularSelectEmpresaPedido(); popularSelectAssinaturas(); renderPedidos(); }
-    if(btn.dataset.tab==='documentos') { popularSelectEmpresaDoc(); renderDocumentos(); }
-  });
+  btn.addEventListener('click', ()=>abrirGrupo(btn.dataset.grupo));
+});
+document.querySelectorAll('#submenu .submenu-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>abrirGrupo(btn.closest('.submenu-grupo').dataset.grupo, btn.dataset.tab));
 });
 
 // ---- Cadastro em lote (vários itens no mesmo empenho) ----

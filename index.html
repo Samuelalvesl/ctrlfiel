@@ -221,6 +221,7 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
   <div class="submenu-grupo" data-grupo="empenho">
     <button class="submenu-btn active" data-tab="cadastro" type="button">Cadastrar Empenho</button>
     <button class="submenu-btn" data-tab="saldos" type="button">Saldo de Empenho</button>
+    <button class="submenu-btn" data-tab="carteira" type="button">Controle de Saldo</button>
   </div>
   <div class="submenu-grupo hidden" data-grupo="controle">
     <button class="submenu-btn active" data-tab="baixa" type="button">Registrar Nota Fiscal</button>
@@ -244,6 +245,7 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
         <div class="field"><label>Número da nota de empenho (NE)</label><input id="m-numero" placeholder="Ex: 2025NE1"></div>
         <div class="field"><label>Empresa favorecida</label><input id="m-empresa" placeholder="Razão social" list="lista-empresas"></div>
         <div class="field"><label>SOLEMP</label><input id="m-solemp" placeholder="Ex: SOL-003"></div>
+        <div class="field"><label>Célula de Crédito (opcional)</label><select id="m-celula"></select></div>
       </div>
       <div class="tablewrap" style="margin-top:16px">
         <table id="tbl-multi-itens">
@@ -266,6 +268,44 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
       <h2>Empenhos e saldos</h2>
       <input class="search" id="busca-saldo" placeholder="Buscar por número, empresa, pregão ou item...">
       <div id="saldos-container"></div>
+    </div>
+  </section>
+
+  <section id="tab-carteira" class="tab hidden">
+    <div class="card">
+      <h2>Células de crédito</h2>
+      <p style="color:var(--muted); font-size:.78rem; margin-top:-8px; margin-bottom:14px">Carteira de saldos: cada célula guarda o seu próprio saldo, sem misturar com as demais. Cadastre as células e depois lance os créditos.</p>
+      <div class="grid">
+        <div class="field"><label>Nome / identificação da célula</label><input id="cel-nome" placeholder="Ex: Célula 1 / Gêneros 2026" autocomplete="off"></div>
+      </div>
+      <div class="actions"><button class="primary" id="btn-cel-cadastrar" type="button">Cadastrar célula</button><span id="msg-cel"></span></div>
+      <div class="tablewrap" style="margin-top:14px">
+        <table id="tbl-celulas">
+          <thead><tr><th>Célula</th><th>Saldo disponível</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Lançar crédito</h2>
+      <div class="grid">
+        <div class="field"><label>Célula de crédito</label><select id="cred-celula"></select></div>
+        <div class="field"><label>Valor do crédito (R$)</label><input id="cred-valor" type="text" inputmode="decimal" placeholder="ex: 1.500,00" autocomplete="off"></div>
+        <div class="field"><label>Descrição (opcional)</label><input id="cred-desc" placeholder="Ex: Crédito recebido em 21/10" autocomplete="off"></div>
+      </div>
+      <div class="actions"><button class="primary" id="btn-cred-lancar" type="button">Lançar crédito</button><span id="msg-cred"></span></div>
+    </div>
+
+    <div class="card">
+      <h2>Histórico de movimentações</h2>
+      <div class="grid"><div class="field"><label>Filtrar por célula</label><select id="mov-filtro"></select></div></div>
+      <div class="tablewrap" style="margin-top:10px">
+        <table id="tbl-movimentos">
+          <thead><tr><th>Data</th><th>Célula</th><th>Tipo</th><th>Descrição</th><th>Valor</th><th>Saldo após</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
   </section>
 
@@ -495,7 +535,7 @@ import {
   updateEmail, updatePassword
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
-  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, getDocs, query, where, writeBatch, deleteField
+  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, getDocs, query, where, writeBatch, deleteField, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
 
@@ -559,7 +599,14 @@ function empenhoFromDoc(d){
   const r = d.data();
   return { id:d.id, pregao:r.pregao||'', vigencia:r.vigencia||'', numero:r.numero, empresa:r.empresaNome||'',
     solemp:r.solemp||'', item:r.item, uf:r.uf||'', vunit:Number(r.valorUnitario), qtd:Number(r.quantidade),
-    valorTotal:Number(r.valorTotal), saldoQtd:Number(r.saldoQtd), saldoValor:Number(r.saldoValor) };
+    valorTotal:Number(r.valorTotal), saldoQtd:Number(r.saldoQtd), saldoValor:Number(r.saldoValor),
+    celulaId:r.celulaCreditoId||'', celulaNome:r.celulaCreditoNome||'' };
+}
+function celulaFromDoc(d){ const r=d.data(); return { id:d.id, nome:r.nome||'', saldo:Number(r.saldo)||0 }; }
+function movimentoFromDoc(d){
+  const r=d.data();
+  return { id:d.id, celulaId:r.celulaId, celulaNome:r.celulaNome||'', tipo:r.tipo, valor:Number(r.valor)||0,
+    saldoApos:Number(r.saldoApos)||0, descricao:r.descricao||'', empenhoNumero:r.empenhoNumero||'', createdAt:Number(r.createdAt)||0 };
 }
 function nfFromDoc(d){
   const r = d.data();
@@ -591,6 +638,8 @@ function documentoFromDoc(d){
 }
 
 let empresas = [];
+let celulas = [];
+let movimentos = [];
 let assinaturas = [];
 let pedidos = [];
 let documentos = [];
@@ -613,6 +662,15 @@ async function carregarDados(){
   assinaturas = assinaturaSnap.docs.map(assinaturaFromDoc);
   pedidos = pedidoSnap.docs.map(pedidoFromDoc);
   documentos = docSnap.docs.map(documentoFromDoc);
+
+  try{
+    const [celSnap, movSnap] = await Promise.all([
+      getDocs(query(collection(db,'celulasCredito'), where('userId','==',uidAtual))),
+      getDocs(query(collection(db,'movimentosCredito'), where('userId','==',uidAtual)))
+    ]);
+    celulas = celSnap.docs.map(celulaFromDoc);
+    movimentos = movSnap.docs.map(movimentoFromDoc);
+  }catch(e){ console.error('Erro ao carregar o Controle de Saldo:', e.code, e.message); celulas = []; movimentos = []; }
 
   // configurações globais do sistema (nome da OM e logotipo) — lidas por todos, editadas só pelo admin
   try{
@@ -757,6 +815,7 @@ async function mostrarApp(user){
     console.error('Erro ao carregar dados:', err.code, err.message);
   }
   renderSaldos(); renderSelectNE(); renderHistorico(); renderEmpresas(); renderAssinaturas();
+  renderCarteira(); renderSelectCelulaCadastro();
   popularSelectEmpresaPedido(); popularSelectAssinaturas(); renderPedidos();
   popularSelectEmpresaDoc(); renderDocumentos();
   renderSubnavUsuarios();
@@ -887,6 +946,8 @@ function abrirTela(tab){
   document.querySelectorAll('.tab').forEach(t=>t.classList.add('hidden'));
   document.getElementById('tab-'+tab).classList.remove('hidden');
   if(tab==='saldos') renderSaldos();
+  if(tab==='carteira') renderCarteira();
+  if(tab==='cadastro') renderSelectCelulaCadastro();
   if(tab==='baixa') renderSelectNE();
   if(tab==='historico') renderHistorico();
   if(tab==='config') { renderEmpresas(); renderAssinaturas(); }
@@ -968,21 +1029,242 @@ document.getElementById('btn-salvar-multi').addEventListener('click', async ()=>
     return;
   }
 
-  let salvos;
+  if(salvandoEmpenho) return; // evita cliques repetidos
+  salvandoEmpenho = true;
+  const btnSalvar = document.getElementById('btn-salvar-multi');
+  btnSalvar.disabled = true;
   try{
-    salvos = await Promise.all(rows.map(async r=>{
-      const ref = await addDoc(collection(db,'empenhos'), r);
-      return { id: ref.id, pregao:r.pregao, vigencia:r.vigencia, numero:r.numero, empresa:r.empresaNome,
-        solemp:r.solemp, item:r.item, uf:r.uf, vunit:r.valorUnitario, qtd:r.quantidade,
-        valorTotal:r.valorTotal, saldoQtd:r.saldoQtd, saldoValor:r.saldoValor };
-    }));
-  }catch(err){ msg.className='msg err'; msg.textContent='Erro ao salvar: '+err.message; return; }
+    const celulaId = document.getElementById('m-celula').value;
+    let salvos;
+    if(!celulaId){
+      // sem célula de crédito: fluxo normal, nenhuma dedução
+      try{
+        salvos = await Promise.all(rows.map(async r=>{
+          const ref = await addDoc(collection(db,'empenhos'), r);
+          return { id: ref.id, pregao:r.pregao, vigencia:r.vigencia, numero:r.numero, empresa:r.empresaNome,
+            solemp:r.solemp, item:r.item, uf:r.uf, vunit:r.valorUnitario, qtd:r.quantidade,
+            valorTotal:r.valorTotal, saldoQtd:r.saldoQtd, saldoValor:r.saldoValor, celulaId:'', celulaNome:'' };
+        }));
+      }catch(err){ msg.className='msg err'; msg.textContent='Erro ao salvar: '+err.message; return; }
+      msg.className='msg ok'; msg.textContent=`${salvos.length} item(ns) salvo(s) no empenho ${numero}.`;
+    } else {
+      const cel = celulas.find(c=>c.id===celulaId);
+      if(!cel){ msg.className='msg err'; msg.textContent='A célula de crédito selecionada não foi encontrada. Atualize a tela e tente novamente.'; return; }
+      const totalEmpenho = arredMoeda(rows.reduce((t,r)=>t+r.valorTotal,0));
+      msg.className='msg'; msg.textContent='Salvando empenho e atualizando a célula de crédito...';
+      try{
+        // tudo ou nada: itens do empenho + novo saldo da célula + movimentação, em uma única transação
+        const resultado = await runTransaction(db, async (tx)=>{
+          const celRef = doc(db,'celulasCredito',celulaId);
+          const celSnap = await tx.get(celRef);
+          if(!celSnap.exists()) throw new Error('Célula de crédito não encontrada.');
+          const saldoAtual = Number(celSnap.data().saldo)||0;
+          const novoSaldo = arredMoeda(saldoAtual - totalEmpenho);
+          if(novoSaldo < 0){
+            const e = new Error('SALDO_INSUFICIENTE'); e.saldoAtual = saldoAtual; throw e;
+          }
+          const agora = Date.now();
+          const itensSalvos = rows.map(r=>{
+            const ref = doc(collection(db,'empenhos'));
+            tx.set(ref, { ...r, celulaCreditoId:celulaId, celulaCreditoNome:celSnap.data().nome });
+            return { id:ref.id, pregao:r.pregao, vigencia:r.vigencia, numero:r.numero, empresa:r.empresaNome,
+              solemp:r.solemp, item:r.item, uf:r.uf, vunit:r.valorUnitario, qtd:r.quantidade,
+              valorTotal:r.valorTotal, saldoQtd:r.saldoQtd, saldoValor:r.saldoValor,
+              celulaId, celulaNome:celSnap.data().nome };
+          });
+          tx.update(celRef, { saldo:novoSaldo });
+          const movRef = doc(collection(db,'movimentosCredito'));
+          const mov = { celulaId, celulaNome:celSnap.data().nome, tipo:'saida', valor:totalEmpenho, saldoApos:novoSaldo,
+            descricao:`Empenho ${numero} — ${empresa}`, empenhoNumero:numero, userId:usuarioAtual.uid, createdAt:agora };
+          tx.set(movRef, mov);
+          return { itensSalvos, novoSaldo, mov:{ id:movRef.id, ...mov } };
+        });
+        salvos = resultado.itensSalvos;
+        cel.saldo = resultado.novoSaldo;
+        movimentos.push(movimentoFromDoc({ id:resultado.mov.id, data:()=>resultado.mov }));
+        msg.className='msg ok';
+        msg.textContent=`${salvos.length} item(ns) salvo(s) no empenho ${numero}. Deduzido ${fmtMoney(totalEmpenho)} da célula "${cel.nome}" — saldo atual: ${fmtMoney(resultado.novoSaldo)}.`;
+      }catch(err){
+        if(err.message==='SALDO_INSUFICIENTE'){
+          cel.saldo = err.saldoAtual;
+          msg.className='msg err';
+          msg.textContent=`Saldo insuficiente na célula "${cel.nome}": disponível ${fmtMoney(err.saldoAtual)}, valor do empenho ${fmtMoney(totalEmpenho)}. Nada foi salvo. Lance mais crédito, reduza o empenho ou cadastre-o sem selecionar célula.`;
+        } else {
+          msg.className='msg err';
+          msg.textContent='Erro ao salvar: '+err.message+'. Nada foi alterado na célula de crédito. Confira em "Saldo de Empenho" antes de tentar novamente.';
+        }
+        renderSelectCelulaCadastro(); renderCarteira();
+        return;
+      }
+    }
+    empenhos.push(...salvos);
+    document.querySelector('#tbl-multi-itens tbody').innerHTML='';
+    ['m-pregao','m-vigencia','m-numero','m-empresa','m-solemp'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('m-celula').value='';
+    addLinhaMulti(); addLinhaMulti(); addLinhaMulti();
+    renderSelectCelulaCadastro(); renderCarteira();
+  } finally {
+    salvandoEmpenho = false;
+    btnSalvar.disabled = false;
+  }
+});
+let salvandoEmpenho = false;
 
-  empenhos.push(...salvos);
-  msg.className='msg ok'; msg.textContent=`${salvos.length} item(ns) salvo(s) no empenho ${numero}.`;
-  document.querySelector('#tbl-multi-itens tbody').innerHTML='';
-  ['m-pregao','m-vigencia','m-numero','m-empresa','m-solemp'].forEach(id=>document.getElementById(id).value='');
-  addLinhaMulti(); addLinhaMulti(); addLinhaMulti();
+
+// ---- Controle de Saldo (carteira por célula de crédito) ----
+function parseMoeda(txt){
+  const t = String(txt==null?'':txt).trim().replace(/\s/g,'').replace(/^R\$/i,'');
+  if(t==='') return {vazio:true};
+  let x = t;
+  if(x.includes('.')){
+    if(!x.includes(',') || !/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(x)) return {erro:'Use vírgula como separador decimal (ex: 1.500,00).'};
+    x = x.replace(/\./g,'');
+  }
+  if(!/^\d+(,\d{1,2})?$/.test(x)) return {erro:'Valor inválido. Use números e vírgula, com até 2 casas decimais (ex: 1500,00).'};
+  return { valor: arredMoeda(parseFloat(x.replace(',','.'))) };
+}
+function celulaNomeDe(e){ const c = celulas.find(x=>x.id===e.celulaId); return c ? c.nome : (e.celulaNome||''); }
+
+function renderSelectCelulaCadastro(){
+  const sel = document.getElementById('m-celula');
+  if(!sel) return;
+  const atual = sel.value;
+  const ord = celulas.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+  sel.innerHTML = '<option value="">— Sem célula de crédito —</option>' + ord.map(()=>'<option></option>').join('');
+  ord.forEach((c,i)=>{ const o=sel.options[i+1]; o.value=c.id; o.textContent=`${c.nome} — saldo ${fmtMoney(c.saldo)}`; });
+  sel.value = ord.some(c=>c.id===atual) ? atual : '';
+}
+
+function renderCarteira(){
+  const ord = celulas.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+  const tb = document.querySelector('#tbl-celulas tbody');
+  if(ord.length===0){
+    tb.innerHTML = `<tr><td colspan="3" class="empty">Nenhuma célula cadastrada ainda.</td></tr>`;
+  } else {
+    tb.innerHTML = ord.map(c=>`<tr data-id="${c.id}"><td class="cel-nome"></td><td>${fmtMoney(c.saldo)}</td>
+      <td style="white-space:nowrap"><button type="button" class="btn-cel-renomear" title="Renomear" style="padding:4px 9px">✏️</button>
+        <button type="button" class="danger btn-cel-excluir">Excluir</button></td></tr>`).join('') +
+      `<tr><td><b>Total</b></td><td><b>${fmtMoney(arredMoeda(ord.reduce((t,c)=>t+c.saldo,0)))}</b></td><td></td></tr>`;
+    [...tb.querySelectorAll('tr[data-id]')].forEach(tr=>{ tr.querySelector('.cel-nome').textContent = celulas.find(c=>c.id===tr.dataset.id).nome; });
+  }
+
+  const selCred = document.getElementById('cred-celula');
+  const atualCred = selCred.value;
+  selCred.innerHTML = '<option value="">Selecione a célula...</option>' + ord.map(()=>'<option></option>').join('');
+  ord.forEach((c,i)=>{ const o=selCred.options[i+1]; o.value=c.id; o.textContent=`${c.nome} — saldo ${fmtMoney(c.saldo)}`; });
+  selCred.value = ord.some(c=>c.id===atualCred) ? atualCred : '';
+
+  const selF = document.getElementById('mov-filtro');
+  const atualF = selF.value;
+  selF.innerHTML = '<option value="">Todas as células</option>' + ord.map(()=>'<option></option>').join('');
+  ord.forEach((c,i)=>{ const o=selF.options[i+1]; o.value=c.id; o.textContent=c.nome; });
+  selF.value = ord.some(c=>c.id===atualF) ? atualF : '';
+
+  const lista = movimentos.slice().reverse()
+    .sort((a,b)=>b.createdAt-a.createdAt)
+    .filter(m=>!selF.value || m.celulaId===selF.value);
+  const tm = document.querySelector('#tbl-movimentos tbody');
+  if(lista.length===0){
+    tm.innerHTML = `<tr><td colspan="6" class="empty">Nenhuma movimentação registrada.</td></tr>`;
+  } else {
+    tm.innerHTML = lista.map(()=>'<tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+    [...tm.rows].forEach((tr,i)=>{
+      const m = lista[i];
+      const c = celulas.find(x=>x.id===m.celulaId);
+      tr.cells[0].textContent = new Date(m.createdAt).toLocaleString('pt-BR');
+      tr.cells[1].textContent = c ? c.nome : m.celulaNome;
+      tr.cells[2].innerHTML = m.tipo==='entrada' ? '<span class="pill ok">Entrada</span>' : '<span class="pill warn">Saída</span>';
+      tr.cells[3].textContent = m.descricao;
+      tr.cells[4].textContent = (m.tipo==='entrada'?'+ ':'− ') + fmtMoney(m.valor);
+      tr.cells[5].textContent = fmtMoney(m.saldoApos);
+    });
+  }
+}
+document.getElementById('mov-filtro').addEventListener('change', renderCarteira);
+
+function msgCart(id, texto, ok){ const m=document.getElementById(id); m.className = texto ? (ok?'msg ok':'msg err') : ''; m.textContent = texto||''; }
+
+let cadastrandoCelula = false;
+document.getElementById('btn-cel-cadastrar').addEventListener('click', async ()=>{
+  if(cadastrandoCelula) return;
+  const nome = document.getElementById('cel-nome').value.trim();
+  if(!nome){ msgCart('msg-cel','Informe o nome ou a identificação da célula.',false); return; }
+  if(celulas.some(c=>c.nome.trim().toLowerCase()===nome.toLowerCase())){ msgCart('msg-cel',`Já existe uma célula chamada "${nome}".`,false); return; }
+  cadastrandoCelula = true;
+  try{
+    const dados = { nome, saldo:0, userId:usuarioAtual.uid, createdAt:Date.now() };
+    const ref = await addDoc(collection(db,'celulasCredito'), dados);
+    celulas.push({ id:ref.id, nome, saldo:0 });
+    document.getElementById('cel-nome').value='';
+    msgCart('msg-cel',`Célula "${nome}" cadastrada.`,true);
+    renderCarteira(); renderSelectCelulaCadastro();
+  }catch(err){ msgCart('msg-cel','Erro ao cadastrar: '+err.message,false); }
+  finally{ cadastrandoCelula = false; }
+});
+
+document.querySelector('#tbl-celulas tbody').addEventListener('click', async (ev)=>{
+  const tr = ev.target.closest('tr[data-id]'); if(!tr) return;
+  const c = celulas.find(x=>x.id===tr.dataset.id); if(!c) return;
+  if(ev.target.closest('.btn-cel-renomear')){
+    const novo = (prompt('Novo nome da célula:', c.nome)||'').trim();
+    if(!novo || novo===c.nome) return;
+    if(celulas.some(x=>x.id!==c.id && x.nome.trim().toLowerCase()===novo.toLowerCase())){ msgCart('msg-cel',`Já existe uma célula chamada "${novo}".`,false); return; }
+    try{
+      await updateDoc(doc(db,'celulasCredito',c.id), { nome:novo });
+      c.nome = novo;
+      msgCart('msg-cel','Célula renomeada. O histórico e os empenhos continuam vinculados.',true);
+      renderCarteira(); renderSelectCelulaCadastro(); renderSaldos();
+    }catch(err){ msgCart('msg-cel','Erro ao renomear: '+err.message,false); }
+  }
+  if(ev.target.closest('.btn-cel-excluir')){
+    if(movimentos.some(m=>m.celulaId===c.id) || empenhos.some(e=>e.celulaId===c.id) || c.saldo!==0){
+      msgCart('msg-cel',`A célula "${c.nome}" não pode ser excluída: ela tem saldo, movimentações ou empenhos vinculados. O histórico precisa ser preservado.`,false); return;
+    }
+    if(!confirm(`Excluir a célula "${c.nome}"?`)) return;
+    try{
+      await deleteDoc(doc(db,'celulasCredito',c.id));
+      celulas = celulas.filter(x=>x.id!==c.id);
+      msgCart('msg-cel','Célula excluída.',true);
+      renderCarteira(); renderSelectCelulaCadastro();
+    }catch(err){ msgCart('msg-cel','Erro ao excluir: '+err.message,false); }
+  }
+});
+
+let lancandoCredito = false;
+document.getElementById('btn-cred-lancar').addEventListener('click', async ()=>{
+  if(lancandoCredito) return;
+  const celulaId = document.getElementById('cred-celula').value;
+  const v = parseMoeda(document.getElementById('cred-valor').value);
+  const descricao = document.getElementById('cred-desc').value.trim() || 'Entrada de crédito';
+  const cel = celulas.find(c=>c.id===celulaId);
+  if(!cel){ msgCart('msg-cred','Selecione a célula de crédito.',false); return; }
+  if(v.vazio){ msgCart('msg-cred','Informe o valor do crédito.',false); return; }
+  if(v.erro){ msgCart('msg-cred',v.erro,false); return; }
+  if(v.valor<=0){ msgCart('msg-cred','O valor do crédito deve ser maior que zero.',false); return; }
+  lancandoCredito = true;
+  const btn = document.getElementById('btn-cred-lancar'); btn.disabled = true;
+  try{
+    // saldo e movimentação são gravados juntos (transação): nunca um sem o outro
+    const r = await runTransaction(db, async (tx)=>{
+      const celRef = doc(db,'celulasCredito',celulaId);
+      const snap = await tx.get(celRef);
+      if(!snap.exists()) throw new Error('Célula de crédito não encontrada.');
+      const novoSaldo = arredMoeda((Number(snap.data().saldo)||0) + v.valor);
+      tx.update(celRef, { saldo:novoSaldo });
+      const movRef = doc(collection(db,'movimentosCredito'));
+      const mov = { celulaId, celulaNome:snap.data().nome, tipo:'entrada', valor:v.valor, saldoApos:novoSaldo,
+        descricao, empenhoNumero:'', userId:usuarioAtual.uid, createdAt:Date.now() };
+      tx.set(movRef, mov);
+      return { novoSaldo, mov:{ id:movRef.id, ...mov } };
+    });
+    cel.saldo = r.novoSaldo;
+    movimentos.push(movimentoFromDoc({ id:r.mov.id, data:()=>r.mov }));
+    document.getElementById('cred-valor').value=''; document.getElementById('cred-desc').value='';
+    msgCart('msg-cred',`Crédito de ${fmtMoney(v.valor)} lançado. Saldo atual da célula "${cel.nome}": ${fmtMoney(r.novoSaldo)}.`,true);
+    renderCarteira(); renderSelectCelulaCadastro();
+  }catch(err){
+    msgCart('msg-cred','Erro ao lançar o crédito: '+err.message+'. Nenhum saldo foi alterado; confira o histórico antes de tentar novamente.',false);
+  }finally{ lancandoCredito = false; btn.disabled = false; }
 });
 
 // ---- Saldos agrupados por empenho ----
@@ -1014,6 +1296,7 @@ function renderCardNE(ne, itens){
         <span><b>Pregão:</b> ${first.pregao||'-'}</span>
         <span><b>SOLEMP:</b> ${first.solemp||'-'}</span>
         <span><b>Vigência:</b> ${first.vigencia||'-'}</span>
+        ${first.celulaId||first.celulaNome ? `<span><b>Célula de crédito:</b> ${celulaNomeDe(first)}</span>` : ''}
       </div>
       <div class="totais">
         <span>Vlr. total<strong>${fmtMoney(totalValor)}</strong></span>
@@ -1096,7 +1379,9 @@ function renderSaldos(){
 document.getElementById('busca-saldo').addEventListener('input', renderSaldos);
 
 window.removerEmpenho = async function(id){
-  if(!confirm('Excluir este item de empenho? O histórico de notas fiscais vinculado a ele será mantido, mas perderá a referência.')) return;
+  const it = empenhos.find(e=>e.id===id);
+  const avisoCel = it && it.celulaId ? `\n\nATENÇÃO: este empenho está vinculado à célula de crédito "${celulaNomeDe(it)}". O valor já deduzido NÃO será devolvido automaticamente ao saldo da célula.` : '';
+  if(!confirm('Excluir este item de empenho? O histórico de notas fiscais vinculado a ele será mantido, mas perderá a referência.'+avisoCel)) return;
   try{ await deleteDoc(doc(db,'empenhos',id)); }
   catch(err){ alert('Erro ao excluir: '+err.message); return; }
   empenhos = empenhos.filter(e=>e.id!==id);
@@ -1106,7 +1391,9 @@ window.removerEmpenho = async function(id){
 window.removerEmpenhoCompleto = async function(ne){
   const itens = empenhos.filter(e=>e.numero===ne);
   if(itens.length===0) return;
-  if(!confirm(`Excluir o empenho ${ne} por completo? Isso vai apagar todos os ${itens.length} item(ns) dele e atualizar os saldos. O histórico de notas fiscais vinculado será mantido, mas perderá a referência. Essa ação não pode ser desfeita.`)) return;
+  const vinc = itens.find(e=>e.celulaId);
+  const avisoCel = vinc ? `\n\nATENÇÃO: este empenho está vinculado à célula de crédito "${celulaNomeDe(vinc)}". O valor já deduzido NÃO será devolvido automaticamente ao saldo da célula.` : '';
+  if(!confirm(`Excluir o empenho ${ne} por completo? Isso vai apagar todos os ${itens.length} item(ns) dele e atualizar os saldos. O histórico de notas fiscais vinculado será mantido, mas perderá a referência. Essa ação não pode ser desfeita.${avisoCel}`)) return;
   try{
     await Promise.all(itens.map(e=>deleteDoc(doc(db,'empenhos',e.id))));
   }catch(err){ alert('Erro ao excluir o empenho: '+err.message); return; }
@@ -1292,6 +1579,9 @@ async function salvarEdicaoItem(){
     novosNF.push({ n, saldoQ, saldoV: saldoValorDe(saldoQ, vunit) });
   });
 
+  if(e.celulaId && novoValorTotal!==e.valorTotal){
+    if(!confirm(`Este empenho está vinculado à célula de crédito "${celulaNomeDe(e)}". Alterar o valor do item NÃO ajusta o saldo da célula automaticamente (já foram deduzidos ${fmtMoney(e.valorTotal)} por este item). Confirmar a alteração?`)) return;
+  }
   msgEdicao('Salvando...', true);
   const ops = [{ col:'empenhos', id:e.id, dados:{
     item, uf, valorUnitario:vunit, quantidade:novaQtd, valorTotal:novoValorTotal,

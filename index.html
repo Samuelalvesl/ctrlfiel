@@ -44,6 +44,13 @@ nav button.active{background:var(--tab-active); color:#fff; border-color:var(--t
 #submenu .submenu-grupo{display:flex; gap:6px; flex-wrap:wrap}
 .submenu-btn{background:transparent; border:1px solid var(--line); color:var(--muted); padding:7px 14px; border-radius:7px; cursor:pointer; font-size:.82rem; font-weight:600}
 .submenu-btn.active{background:var(--panel); color:var(--tab-active); border-color:var(--tab-active)}
+button:disabled, button.danger:disabled{opacity:.4; cursor:not-allowed}
+.st-badge{display:inline-block; padding:3px 11px; border-radius:999px; font-size:.72rem; font-weight:700; color:#fff; border:1px solid transparent; letter-spacing:.2px}
+.st-ativo{background:#2e9e5b}
+.st-processamento{background:#7c3aed}
+.st-finalizado{background:#d63a3a}
+.st-a_cancelar{background:#f5c518; color:#1b1b1b}
+.st-cancelado{background:#000; color:#fff; border-color:#7a8793}
 main{padding:16px 20px 60px; max-width:1100px; margin:0 auto}
 .card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:16px}
 .card h2{margin:0 0 14px; font-size:1.05rem}
@@ -211,6 +218,21 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
   </div>
 </div>
 
+<div id="cancel-modal" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:60; display:flex; align-items:center; justify-content:center; padding:20px">
+  <div class="card" style="max-width:520px; width:100%; margin:0; max-height:90vh; overflow-y:auto">
+    <h2 id="cn-titulo">Cancelar empenho</h2>
+    <p id="cn-info" style="color:var(--muted); font-size:.85rem; line-height:1.45"></p>
+    <div id="cn-bloco-destino" class="hidden">
+      <div class="field"><label>Célula de crédito que receberá o saldo restante</label><select id="cn-celula"></select></div>
+    </div>
+    <div id="msg-cancel" style="margin-top:12px"></div>
+    <div class="actions" style="margin-top:16px">
+      <button class="primary" id="btn-confirmar-cancel" type="button">Confirmar cancelamento</button>
+      <button id="btn-fechar-cancel" type="button">Voltar</button>
+    </div>
+  </div>
+</div>
+
 <nav>
   <button data-grupo="empenho" class="active">Empenho</button>
   <button data-grupo="controle">Controle</button>
@@ -302,7 +324,7 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
       <div class="grid"><div class="field"><label>Filtrar por célula</label><select id="mov-filtro"></select></div></div>
       <div class="tablewrap" style="margin-top:10px">
         <table id="tbl-movimentos">
-          <thead><tr><th>Data</th><th>Célula</th><th>Tipo</th><th>Descrição</th><th>Valor</th><th>Saldo após</th></tr></thead>
+          <thead><tr><th>Data</th><th>Célula</th><th>Tipo</th><th>Descrição</th><th>Valor</th><th>Saldo após</th><th>Usuário</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -600,13 +622,16 @@ function empenhoFromDoc(d){
   return { id:d.id, pregao:r.pregao||'', vigencia:r.vigencia||'', numero:r.numero, empresa:r.empresaNome||'',
     solemp:r.solemp||'', item:r.item, uf:r.uf||'', vunit:Number(r.valorUnitario), qtd:Number(r.quantidade),
     valorTotal:Number(r.valorTotal), saldoQtd:Number(r.saldoQtd), saldoValor:Number(r.saldoValor),
-    celulaId:r.celulaCreditoId||'', celulaNome:r.celulaCreditoNome||'' };
+    celulaId:r.celulaCreditoId||'', celulaNome:r.celulaCreditoNome||'',
+    status:r.status||'', valorDevolvido:Number(r.valorDevolvido)||0, canceladoEm:Number(r.canceladoEm)||0,
+    canceladoPor:r.canceladoPor||'', celulaDevolucaoNome:r.celulaDevolucaoNome||'' };
 }
 function celulaFromDoc(d){ const r=d.data(); return { id:d.id, nome:r.nome||'', saldo:Number(r.saldo)||0 }; }
 function movimentoFromDoc(d){
   const r=d.data();
   return { id:d.id, celulaId:r.celulaId, celulaNome:r.celulaNome||'', tipo:r.tipo, valor:Number(r.valor)||0,
-    saldoApos:Number(r.saldoApos)||0, descricao:r.descricao||'', empenhoNumero:r.empenhoNumero||'', createdAt:Number(r.createdAt)||0 };
+    saldoApos:Number(r.saldoApos)||0, descricao:r.descricao||'', empenhoNumero:r.empenhoNumero||'', createdAt:Number(r.createdAt)||0,
+    usuarioEmail:r.usuarioEmail||'' };
 }
 function nfFromDoc(d){
   const r = d.data();
@@ -1002,6 +1027,11 @@ document.getElementById('btn-salvar-multi').addEventListener('click', async ()=>
     return;
   }
 
+  if(empenhos.some(e=>e.numero===numero)){
+    const c = checarOp(numero,'editar');
+    if(!c.ok){ msg.className='msg err'; msg.textContent='Não é possível incluir itens neste empenho. '+c.msg; return; }
+  }
+
   const linhas = [...document.querySelectorAll('#tbl-multi-itens tbody tr')];
   const rows = [];
   let erroLinha = '';
@@ -1020,7 +1050,7 @@ document.getElementById('btn-salvar-multi').addEventListener('click', async ()=>
     const valorTotal = arredMoeda(vunit*qtd);
     rows.push({ pregao, vigencia, numero, empresaNome:empresa, solemp, item, uf,
       valorUnitario:vunit, quantidade:qtd, valorTotal:valorTotal, saldoQtd:qtd, saldoValor:valorTotal,
-      userId: usuarioAtual.uid, createdAt: Date.now() });
+      status:'ativo', userId: usuarioAtual.uid, createdAt: Date.now() });
   });
   if(erroLinha){ msg.className='msg err'; msg.textContent=erroLinha; return; }
 
@@ -1043,7 +1073,7 @@ document.getElementById('btn-salvar-multi').addEventListener('click', async ()=>
           const ref = await addDoc(collection(db,'empenhos'), r);
           return { id: ref.id, pregao:r.pregao, vigencia:r.vigencia, numero:r.numero, empresa:r.empresaNome,
             solemp:r.solemp, item:r.item, uf:r.uf, vunit:r.valorUnitario, qtd:r.quantidade,
-            valorTotal:r.valorTotal, saldoQtd:r.saldoQtd, saldoValor:r.saldoValor, celulaId:'', celulaNome:'' };
+            valorTotal:r.valorTotal, saldoQtd:r.saldoQtd, saldoValor:r.saldoValor, celulaId:'', celulaNome:'', status:'ativo' };
         }));
       }catch(err){ msg.className='msg err'; msg.textContent='Erro ao salvar: '+err.message; return; }
       msg.className='msg ok'; msg.textContent=`${salvos.length} item(ns) salvo(s) no empenho ${numero}.`;
@@ -1070,12 +1100,12 @@ document.getElementById('btn-salvar-multi').addEventListener('click', async ()=>
             return { id:ref.id, pregao:r.pregao, vigencia:r.vigencia, numero:r.numero, empresa:r.empresaNome,
               solemp:r.solemp, item:r.item, uf:r.uf, vunit:r.valorUnitario, qtd:r.quantidade,
               valorTotal:r.valorTotal, saldoQtd:r.saldoQtd, saldoValor:r.saldoValor,
-              celulaId, celulaNome:celSnap.data().nome };
+              celulaId, celulaNome:celSnap.data().nome, status:'ativo' };
           });
           tx.update(celRef, { saldo:novoSaldo });
           const movRef = doc(collection(db,'movimentosCredito'));
           const mov = { celulaId, celulaNome:celSnap.data().nome, tipo:'saida', valor:totalEmpenho, saldoApos:novoSaldo,
-            descricao:`Empenho ${numero} — ${empresa}`, empenhoNumero:numero, userId:usuarioAtual.uid, createdAt:agora };
+            descricao:`Empenho ${numero} — ${empresa}`, empenhoNumero:numero, usuarioEmail:usuarioAtual.email||'', userId:usuarioAtual.uid, createdAt:agora };
           tx.set(movRef, mov);
           return { itensSalvos, novoSaldo, mov:{ id:movRef.id, ...mov } };
         });
@@ -1098,6 +1128,7 @@ document.getElementById('btn-salvar-multi').addEventListener('click', async ()=>
       }
     }
     empenhos.push(...salvos);
+    await sincronizarStatusNE(numero);
     document.querySelector('#tbl-multi-itens tbody').innerHTML='';
     ['m-pregao','m-vigencia','m-numero','m-empresa','m-solemp'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('m-celula').value='';
@@ -1165,18 +1196,20 @@ function renderCarteira(){
     .filter(m=>!selF.value || m.celulaId===selF.value);
   const tm = document.querySelector('#tbl-movimentos tbody');
   if(lista.length===0){
-    tm.innerHTML = `<tr><td colspan="6" class="empty">Nenhuma movimentação registrada.</td></tr>`;
+    tm.innerHTML = `<tr><td colspan="7" class="empty">Nenhuma movimentação registrada.</td></tr>`;
   } else {
-    tm.innerHTML = lista.map(()=>'<tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+    tm.innerHTML = lista.map(()=>'<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('');
     [...tm.rows].forEach((tr,i)=>{
       const m = lista[i];
       const c = celulas.find(x=>x.id===m.celulaId);
       tr.cells[0].textContent = new Date(m.createdAt).toLocaleString('pt-BR');
       tr.cells[1].textContent = c ? c.nome : m.celulaNome;
-      tr.cells[2].innerHTML = m.tipo==='entrada' ? '<span class="pill ok">Entrada</span>' : '<span class="pill warn">Saída</span>';
+      tr.cells[2].innerHTML = m.tipo==='entrada' ? '<span class="pill ok">Entrada</span>'
+        : (m.tipo==='devolucao' ? '<span class="pill ok">Devolução</span>' : '<span class="pill warn">Saída</span>');
       tr.cells[3].textContent = m.descricao;
-      tr.cells[4].textContent = (m.tipo==='entrada'?'+ ':'− ') + fmtMoney(m.valor);
+      tr.cells[4].textContent = (m.tipo==='saida'?'− ':'+ ') + fmtMoney(m.valor);
       tr.cells[5].textContent = fmtMoney(m.saldoApos);
+      tr.cells[6].textContent = m.usuarioEmail || '-';
     });
   }
 }
@@ -1253,7 +1286,7 @@ document.getElementById('btn-cred-lancar').addEventListener('click', async ()=>{
       tx.update(celRef, { saldo:novoSaldo });
       const movRef = doc(collection(db,'movimentosCredito'));
       const mov = { celulaId, celulaNome:snap.data().nome, tipo:'entrada', valor:v.valor, saldoApos:novoSaldo,
-        descricao, empenhoNumero:'', userId:usuarioAtual.uid, createdAt:Date.now() };
+        descricao, empenhoNumero:'', usuarioEmail:usuarioAtual.email||'', userId:usuarioAtual.uid, createdAt:Date.now() };
       tx.set(movRef, mov);
       return { novoSaldo, mov:{ id:movRef.id, ...mov } };
     });
@@ -1267,9 +1300,216 @@ document.getElementById('btn-cred-lancar').addEventListener('click', async ()=>{
   }finally{ lancandoCredito = false; btn.disabled = false; }
 });
 
+
+// ---- Status do empenho ----
+const STATUS_INFO = {
+  ativo:{nome:'Ativo'}, processamento:{nome:'Processamento'}, finalizado:{nome:'Finalizado'},
+  a_cancelar:{nome:'A Cancelar'}, cancelado:{nome:'Cancelado'}
+};
+// o que cada status permite (consulta é sempre permitida)
+const PERMISSOES_STATUS = {
+  ativo:         { pedido:true,  nf:true,  estornoNF:true,  editar:true,  excluir:true  },
+  processamento: { pedido:false, nf:false, estornoNF:false, editar:false, excluir:false },
+  finalizado:    { pedido:false, nf:false, estornoNF:true,  editar:true,  excluir:true  },
+  a_cancelar:    { pedido:false, nf:false, estornoNF:false, editar:false, excluir:false },
+  cancelado:     { pedido:false, nf:false, estornoNF:false, editar:false, excluir:false }
+};
+const DICA_STATUS = {
+  processamento:'Mude o status para "Ativo" para voltar a usar o empenho.',
+  finalizado:'O saldo está zerado. Só é possível corrigir movimentações (estorno de NF) ou editar quantidades.',
+  a_cancelar:'O empenho está em processo de cancelamento: nenhum dado ou saldo pode ser alterado. Confirme o cancelamento ou volte o status para "Ativo".',
+  cancelado:'Empenho definitivamente cancelado: somente consulta.'
+};
+// status efetivo: Ativo/Finalizado são sempre calculados a partir do saldo; os demais vêm do campo gravado
+function statusDeItens(itens){
+  if(!itens || itens.length===0) return 'ativo';
+  for(const st of ['cancelado','a_cancelar','processamento']){ if(itens.some(e=>e.status===st)) return st; }
+  return itens.every(e=>e.saldoQtd<=0) ? 'finalizado' : 'ativo';
+}
+function statusDoNE(numero){ return statusDeItens(empenhos.filter(e=>e.numero===numero)); }
+function checarOp(numero, op){
+  const st = statusDoNE(numero);
+  const ok = PERMISSOES_STATUS[st][op];
+  return { ok, status:st, msg: ok ? '' : `O empenho ${numero} está com status "${STATUS_INFO[st].nome}" e esta operação está bloqueada. ${DICA_STATUS[st]||''}`.trim() };
+}
+// grava Ativo/Finalizado conforme o saldo (usado depois de qualquer movimentação que mude o saldo)
+async function sincronizarStatusNE(numero){
+  const itens = empenhos.filter(e=>e.numero===numero);
+  if(itens.length===0) return;
+  const derivado = statusDeItens(itens);
+  if(derivado!=='ativo' && derivado!=='finalizado') return;
+  const alvos = itens.filter(e=>(e.status||'ativo')!==derivado);
+  if(alvos.length===0) return;
+  try{
+    await gravarEmLotes(alvos.map(e=>({ col:'empenhos', id:e.id, dados:{ status:derivado } })));
+    alvos.forEach(e=>{ e.status = derivado; });
+  }catch(err){ console.error('Não foi possível gravar o status do empenho:', err); }
+}
+
+let statusTrocando = false;
+async function alterarStatusNE(ne, novo){
+  if(statusTrocando) return;
+  const itens = empenhos.filter(e=>e.numero===ne);
+  if(itens.length===0) return;
+  const atual = statusDeItens(itens);
+  const semSaldo = itens.every(e=>e.saldoQtd<=0);
+  const reRender = ()=>{ renderSaldos(); renderSelectNE(); };
+  if(atual==='cancelado'){ alert('Este empenho já foi cancelado definitivamente e não pode mais ser alterado.'); reRender(); return; }
+  if(novo===atual){ return; }
+  if(novo==='finalizado'){ alert('O status "Finalizado" é automático: o empenho passa a Finalizado quando o saldo chega a zero.'); reRender(); return; }
+  if(novo==='cancelado'){ reRender(); abrirCancelamento(ne); return; }
+  if(novo==='ativo' && semSaldo){
+    if(atual==='finalizado'){ alert('Este empenho não tem saldo disponível, por isso permanece Finalizado.'); reRender(); return; }
+    novo = 'finalizado'; // sem saldo, "ativo" equivale a finalizado
+    alert('O empenho não tem saldo disponível; ao sair de "'+STATUS_INFO[atual].nome+'" ele passa automaticamente para Finalizado.');
+  }
+  if(novo==='a_cancelar' && !confirm(`Colocar o empenho ${ne} em "A Cancelar"? Enquanto estiver nesse status ele não aceita pedidos, notas fiscais, edições nem exclusões, e o saldo fica congelado até a decisão final.`)){ reRender(); return; }
+  statusTrocando = true;
+  try{
+    await gravarEmLotes(itens.map(e=>({ col:'empenhos', id:e.id, dados:{ status:novo } })));
+    itens.forEach(e=>{ e.status = novo; });
+  }catch(err){ alert('Erro ao alterar o status: '+err.message); }
+  finally{ statusTrocando = false; }
+  reRender();
+}
+document.getElementById('saldos-container').addEventListener('change', (ev)=>{
+  const sel = ev.target.closest('.sel-status'); if(!sel) return;
+  alterarStatusNE(decodeURIComponent(sel.dataset.ne), sel.value);
+});
+
+// ---- Cancelamento definitivo (devolve o saldo restante à célula de crédito) ----
+let cancelamentoAtual = null;
+let cancelando = false;
+function saldoRestanteNE(itens){ return arredMoeda(itens.reduce((t,e)=>t+(Number(e.saldoValor)||0),0)); }
+function msgCancel(texto, ok){ const m=document.getElementById('msg-cancel'); m.className = texto ? (ok?'msg ok':'msg err') : ''; m.textContent = texto||''; }
+function fecharCancelamento(){ document.getElementById('cancel-modal').classList.add('hidden'); cancelamentoAtual = null; }
+document.getElementById('btn-fechar-cancel').addEventListener('click', fecharCancelamento);
+
+function abrirCancelamento(ne){
+  const itens = empenhos.filter(e=>e.numero===ne);
+  if(itens.length===0) return;
+  if(statusDeItens(itens)==='cancelado'){ alert('Este empenho já foi cancelado.'); return; }
+  const restante = saldoRestanteNE(itens);
+  const vinc = itens.find(e=>e.celulaId);
+  cancelamentoAtual = { ne, celulaVinculadaId: vinc ? vinc.celulaId : '' };
+  document.getElementById('cn-titulo').textContent = `Cancelar empenho ${ne}`;
+  const bloco = document.getElementById('cn-bloco-destino');
+  const btn = document.getElementById('btn-confirmar-cancel');
+  btn.disabled = false;
+  let info = `Esta ação é DEFINITIVA e não pode ser desfeita. Depois de cancelado, o empenho só poderá ser consultado (itens, notas fiscais, pedidos e histórico continuam visíveis). `;
+  bloco.classList.add('hidden');
+  if(restante<=0){
+    info += 'O empenho não tem saldo restante: nenhum valor será devolvido.';
+  } else if(vinc){
+    info += `O saldo restante de ${fmtMoney(restante)} será devolvido automaticamente à célula de crédito "${celulaNomeDe(vinc)}", à qual o empenho está vinculado.`;
+  } else {
+    info += `O saldo restante de ${fmtMoney(restante)} precisa ser devolvido a uma célula de crédito. Este empenho não está vinculado a nenhuma: escolha a célula de destino.`;
+    const sel = document.getElementById('cn-celula');
+    const ord = celulas.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+    sel.innerHTML = '<option value="">Selecione a célula...</option>' + ord.map(()=>'<option></option>').join('');
+    ord.forEach((c,i)=>{ const o=sel.options[i+1]; o.value=c.id; o.textContent=`${c.nome} — saldo ${fmtMoney(c.saldo)}`; });
+    bloco.classList.remove('hidden');
+    if(ord.length===0){ info += ' Nenhuma célula cadastrada: cadastre uma em Empenho → Controle de Saldo antes de cancelar.'; btn.disabled = true; }
+  }
+  document.getElementById('cn-info').textContent = info;
+  msgCancel('');
+  document.getElementById('cancel-modal').classList.remove('hidden');
+}
+
+document.getElementById('btn-confirmar-cancel').addEventListener('click', async ()=>{
+  if(cancelando || !cancelamentoAtual) return;
+  const { ne, celulaVinculadaId } = cancelamentoAtual;
+  const itens = empenhos.filter(e=>e.numero===ne);
+  if(itens.length===0) return;
+  const restanteTela = saldoRestanteNE(itens);
+  const destinoId = celulaVinculadaId || document.getElementById('cn-celula').value;
+  if(restanteTela>0 && !destinoId){ msgCancel('Selecione a célula de crédito que receberá o saldo restante.', false); return; }
+  if(!confirm(`Confirmar o cancelamento DEFINITIVO do empenho ${ne}?`)) return;
+
+  cancelando = true;
+  const btn = document.getElementById('btn-confirmar-cancel'); btn.disabled = true;
+  msgCancel('Cancelando e devolvendo o saldo...', true);
+  const ids = itens.map(e=>e.id);
+  try{
+    // uma única transação: devolução + movimentação + cancelamento dos itens (tudo ou nada)
+    const r = await runTransaction(db, async (tx)=>{
+      const snaps = [];
+      for(const id of ids){ snaps.push(await tx.get(doc(db,'empenhos',id))); }
+      if(snaps.some(sn=>!sn.exists())) throw new Error('Algum item do empenho não foi encontrado. Atualize a tela e tente novamente.');
+      if(snaps.some(sn=>sn.data().status==='cancelado')){ const e=new Error('JA_CANCELADO'); throw e; }
+      const restante = arredMoeda(snaps.reduce((t,sn)=>t+(Number(sn.data().saldoValor)||0),0));
+      let celRef=null, celSnap=null;
+      if(restante>0){
+        if(!destinoId) throw new Error('Selecione a célula de crédito de destino.');
+        celRef = doc(db,'celulasCredito',destinoId);
+        celSnap = await tx.get(celRef);
+        if(!celSnap.exists()) throw new Error('Célula de crédito de destino não encontrada.');
+      }
+      const agora = Date.now();
+      const quem = usuarioAtual.email || '';
+      const destinoNome = celSnap ? celSnap.data().nome : '';
+      const estados = snaps.map(sn=>{
+        const d = sn.data();
+        const dados = { status:'cancelado', saldoQtd:0, saldoValor:0,
+          saldoDevolvidoQtd:Number(d.saldoQtd)||0, valorDevolvido:Number(d.saldoValor)||0,
+          canceladoEm:agora, canceladoPor:quem, celulaDevolucaoId:destinoId||'', celulaDevolucaoNome:destinoNome };
+        tx.update(doc(db,'empenhos',sn.id), dados);
+        return { id:sn.id, dados };
+      });
+      let novoSaldo = null, mov = null;
+      if(restante>0){
+        novoSaldo = arredMoeda((Number(celSnap.data().saldo)||0) + restante);
+        tx.update(celRef, { saldo:novoSaldo });
+        const movRef = doc(db,'movimentosCredito','cancel-'+ids[0]);
+        mov = { celulaId:destinoId, celulaNome:destinoNome, tipo:'devolucao', valor:restante, saldoApos:novoSaldo,
+          descricao:`Devolução do saldo restante — cancelamento do empenho ${ne}`, empenhoNumero:ne,
+          usuarioEmail:quem, userId:usuarioAtual.uid, createdAt:agora };
+        tx.set(movRef, mov);
+        mov = { id:movRef.id, ...mov };
+      }
+      return { restante, estados, novoSaldo, mov, destinoNome };
+    });
+    r.estados.forEach(({id,dados})=>{
+      const e = empenhos.find(x=>x.id===id);
+      if(e) Object.assign(e, { status:'cancelado', saldoQtd:0, saldoValor:0, valorDevolvido:dados.valorDevolvido,
+        canceladoEm:dados.canceladoEm, canceladoPor:dados.canceladoPor, celulaDevolucaoNome:dados.celulaDevolucaoNome });
+    });
+    if(r.mov){
+      const c = celulas.find(x=>x.id===destinoId); if(c) c.saldo = r.novoSaldo;
+      movimentos.push(movimentoFromDoc({ id:r.mov.id, data:()=>r.mov }));
+    }
+    fecharCancelamento();
+    renderSaldos(); renderSelectNE(); renderCarteira(); renderSelectCelulaCadastro(); renderHistorico();
+    alert(r.restante>0
+      ? `Empenho ${ne} cancelado. ${fmtMoney(r.restante)} devolvido(s) à célula "${r.destinoNome}" (saldo atual: ${fmtMoney(r.novoSaldo)}).`
+      : `Empenho ${ne} cancelado. Não havia saldo restante a devolver.`);
+  }catch(err){
+    if(err.message==='JA_CANCELADO'){
+      msgCancel('Este empenho já foi cancelado anteriormente. Nada foi devolvido novamente. Atualize a página para ver a situação atual.', false);
+    } else {
+      msgCancel('Erro ao cancelar: '+err.message+'. Nada foi alterado (nem o empenho nem o saldo da célula).', false);
+    }
+  }finally{
+    cancelando = false; btn.disabled = false;
+  }
+});
+
 // ---- Saldos agrupados por empenho ----
 function renderCardNE(ne, itens){
   const first = itens[0];
+  const st = statusDeItens(itens);
+  const perm = PERMISSOES_STATUS[st];
+  const dicaBloq = `Indisponível: empenho com status ${STATUS_INFO[st].nome}`;
+  const attrEditar = perm.editar ? '' : `disabled title="${dicaBloq}"`;
+  const attrExcluir = perm.excluir ? '' : `disabled title="${dicaBloq}"`;
+  const selStatus = st==='cancelado' ? '' :
+    `<select class="sel-status" data-ne="${encodeURIComponent(ne)}" title="Alterar o status do empenho" style="width:auto; padding:3px 8px; font-size:.76rem">` +
+    (st==='finalizado' ? `<option value="finalizado" selected>Finalizado (automático)</option>` : '') +
+    ['ativo','processamento','a_cancelar','cancelado'].map(o=>`<option value="${o}" ${o===st?'selected':''}>${STATUS_INFO[o].nome}</option>`).join('') +
+    `</select>`;
+  const devolvido = st==='cancelado' ? itens.reduce((t,e)=>t+(e.valorDevolvido||0),0) : 0;
+  const infoCancel = st==='cancelado'
+    ? `<span><b>Saldo devolvido:</b> ${fmtMoney(arredMoeda(devolvido))}${first.celulaDevolucaoNome?` → célula "${first.celulaDevolucaoNome}"`:''}${first.canceladoEm?` em ${new Date(first.canceladoEm).toLocaleDateString('pt-BR')}`:''}${first.canceladoPor?` por ${first.canceladoPor}`:''}</span>` : '';
   const totalValor = itens.reduce((s,e)=>s+e.valorTotal,0);
   const totalSaldo = itens.reduce((s,e)=>s+e.saldoValor,0);
 
@@ -1284,8 +1524,8 @@ function renderCardNE(ne, itens){
       <td>${fmtMoney(e.vunit)}</td><td>${fmtQtd(e.qtd)}</td><td>${fmtMoney(e.valorTotal)}</td>
       <td class="${saldoClass}">${fmtQtd(e.saldoQtd)}</td><td class="${saldoClass}">${fmtMoney(e.saldoValor)}</td>
       <td>${statusHtml}</td>
-      <td style="white-space:nowrap"><button type="button" onclick="abrirEdicaoItem('${e.id}')" title="Editar este item" style="padding:4px 9px">✏️</button>
-        <button class="danger" onclick="removerEmpenho('${e.id}')">Excluir</button></td>
+      <td style="white-space:nowrap"><button type="button" onclick="abrirEdicaoItem('${e.id}')" title="Editar este item" style="padding:4px 9px" ${attrEditar}>✏️</button>
+        <button class="danger" onclick="removerEmpenho('${e.id}')" ${attrExcluir}>Excluir</button></td>
     </tr>`;
   }).join('');
 
@@ -1293,6 +1533,8 @@ function renderCardNE(ne, itens){
     <div class="grupo-header">
       <div class="info">
         <span><b>NE:</b> ${ne}</span>
+        <span><b>Status:</b> <span class="st-badge st-${st}">${STATUS_INFO[st].nome}</span> ${selStatus}</span>
+        ${infoCancel}
         <span><b>Pregão:</b> ${first.pregao||'-'}</span>
         <span><b>SOLEMP:</b> ${first.solemp||'-'}</span>
         <span><b>Vigência:</b> ${first.vigencia||'-'}</span>
@@ -1304,8 +1546,8 @@ function renderCardNE(ne, itens){
         <span>Itens<strong>${itens.length}</strong></span>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap">
-        <button type="button" onclick="abrirEdicaoNE('${first.id}')" title="Editar os dados deste empenho">✏️ Editar empenho</button>
-        <button class="danger" onclick="removerEmpenhoCompleto('${ne.replace(/'/g,"\\'")}')" title="Excluir este empenho e todos os seus itens">🗑️ Excluir empenho</button>
+        <button type="button" onclick="abrirEdicaoNE('${first.id}')" title="${perm.editar?'Editar os dados deste empenho':dicaBloq}" ${attrEditar}>✏️ Editar empenho</button>
+        <button class="danger" onclick="removerEmpenhoCompleto('${ne.replace(/'/g,"\\'")}')" title="${perm.excluir?'Excluir este empenho e todos os seus itens':dicaBloq}" ${attrExcluir}>🗑️ Excluir empenho</button>
       </div>
     </div>
     <div class="tablewrap">
@@ -1380,6 +1622,7 @@ document.getElementById('busca-saldo').addEventListener('input', renderSaldos);
 
 window.removerEmpenho = async function(id){
   const it = empenhos.find(e=>e.id===id);
+  if(it){ const c = checarOp(it.numero,'excluir'); if(!c.ok){ alert(c.msg); return; } }
   const avisoCel = it && it.celulaId ? `\n\nATENÇÃO: este empenho está vinculado à célula de crédito "${celulaNomeDe(it)}". O valor já deduzido NÃO será devolvido automaticamente ao saldo da célula.` : '';
   if(!confirm('Excluir este item de empenho? O histórico de notas fiscais vinculado a ele será mantido, mas perderá a referência.'+avisoCel)) return;
   try{ await deleteDoc(doc(db,'empenhos',id)); }
@@ -1391,6 +1634,7 @@ window.removerEmpenho = async function(id){
 window.removerEmpenhoCompleto = async function(ne){
   const itens = empenhos.filter(e=>e.numero===ne);
   if(itens.length===0) return;
+  { const c = checarOp(ne,'excluir'); if(!c.ok){ alert(c.msg); return; } }
   const vinc = itens.find(e=>e.celulaId);
   const avisoCel = vinc ? `\n\nATENÇÃO: este empenho está vinculado à célula de crédito "${celulaNomeDe(vinc)}". O valor já deduzido NÃO será devolvido automaticamente ao saldo da célula.` : '';
   if(!confirm(`Excluir o empenho ${ne} por completo? Isso vai apagar todos os ${itens.length} item(ns) dele e atualizar os saldos. O histórico de notas fiscais vinculado será mantido, mas perderá a referência. Essa ação não pode ser desfeita.${avisoCel}`)) return;
@@ -1426,6 +1670,7 @@ function msgEdicao(texto, ok){
 window.abrirEdicaoNE = function(idPrimeiroItem){
   const ref = empenhos.find(e=>e.id===idPrimeiroItem);
   if(!ref) return;
+  { const c = checarOp(ref.numero,'editar'); if(!c.ok){ alert(c.msg); return; } }
   const itens = empenhos.filter(e=>e.numero===ref.numero);
   const idsItens = new Set(itens.map(e=>e.id));
   const nfs = notasFiscais.filter(n=>idsItens.has(n.empenhoId));
@@ -1455,6 +1700,7 @@ window.abrirEdicaoNE = function(idPrimeiroItem){
 window.abrirEdicaoItem = function(id){
   const e = empenhos.find(x=>x.id===id);
   if(!e) return;
+  { const c = checarOp(e.numero,'editar'); if(!c.ok){ alert(c.msg); return; } }
   const nfs = notasFiscais.filter(n=>n.empenhoId===id);
   const consumido = arredQtd(e.qtd - e.saldoQtd);
   const temBaixa = nfs.length>0 || consumido>0;
@@ -1496,6 +1742,7 @@ function atualizarTelasAposEdicao(){
 
 async function salvarEdicaoNE(){
   const { numeroOriginal, empresaOriginal } = edicaoAtual;
+  { const c = checarOp(numeroOriginal,'editar'); if(!c.ok){ msgEdicao(c.msg, false); return; } }
   const numero = document.getElementById('ed-numero').value.trim();
   const pregao = document.getElementById('ed-pregao').value.trim();
   const vigencia = document.getElementById('ed-vigencia').value || null;
@@ -1542,6 +1789,7 @@ async function salvarEdicaoItem(){
   const { id, consumido, temBaixa } = edicaoAtual;
   const e = empenhos.find(x=>x.id===id);
   if(!e){ msgEdicao('Item não encontrado.', false); return; }
+  { const c = checarOp(e.numero,'editar'); if(!c.ok){ msgEdicao(c.msg, false); return; } }
 
   const item = document.getElementById('ed-item').value.trim();
   const uf = document.getElementById('ed-uf').value.trim();
@@ -1596,6 +1844,7 @@ async function salvarEdicaoItem(){
   if(mudouQtd || mudouNome){
     novosNF.forEach(({n,saldoQ,saldoV})=>{ n.item = item; n.saldoAposQtd = saldoQ; n.saldoAposValor = saldoV; });
   }
+  await sincronizarStatusNE(e.numero);
 
   fecharEdicao();
   atualizarTelasAposEdicao();
@@ -1614,7 +1863,11 @@ function renderSelectNE(){
     sel.innerHTML = `<option value="">Nenhum empenho cadastrado</option>`;
   } else {
     sel.innerHTML = `<option value="">Selecione o empenho...</option>` +
-      nes.map(ne=>`<option value="${ne}">${ne} — ${empresaDoNE(ne)}</option>`).join('');
+      nes.map(ne=>{
+        const st = statusDoNE(ne);
+        const livre = PERMISSOES_STATUS[st].nf;
+        return `<option value="${ne}" ${livre?'':'disabled'}>${ne} — ${empresaDoNE(ne)}${livre?'':' ['+STATUS_INFO[st].nome+' — indisponível]'}</option>`;
+      }).join('');
   }
   document.getElementById('nf-itens-wrap').classList.add('hidden');
   document.querySelector('#tbl-nf-itens tbody').innerHTML='';
@@ -1628,7 +1881,7 @@ function renderItensDoEmpenhoNaNF(){
   const tbody = document.querySelector('#tbl-nf-itens tbody');
   if(!ne){ wrap.classList.add('hidden'); tbody.innerHTML=''; return; }
   const itens = empenhos.filter(e=>e.numero===ne);
-  if(itens.length===0){ wrap.classList.add('hidden'); tbody.innerHTML=''; return; }
+  if(itens.length===0 || !checarOp(ne,'nf').ok){ wrap.classList.add('hidden'); tbody.innerHTML=''; return; }
   tbody.innerHTML = itens.map(e=>`
     <tr data-id="${e.id}">
       <td>${e.item}</td><td>${e.uf||'-'}</td><td>${fmtMoney(e.vunit)}</td>
@@ -1647,6 +1900,7 @@ document.getElementById('btn-baixar').addEventListener('click', async ()=>{
 
   if(!numeroNF){ msg.className='msg err'; msg.textContent='Informe o número da nota fiscal.'; return; }
   if(!ne){ msg.className='msg err'; msg.textContent='Selecione o empenho ao qual esta nota está vinculada.'; return; }
+  { const c = checarOp(ne,'nf'); if(!c.ok){ msg.className='msg err'; msg.textContent=c.msg; return; } }
 
   const linhas = [...document.querySelectorAll('#tbl-nf-itens tbody tr')];
   const paraBaixar = [];
@@ -1695,7 +1949,10 @@ document.getElementById('btn-baixar').addEventListener('click', async ()=>{
     return;
   }
 
-  msg.className='msg ok'; msg.textContent=`Nota fiscal ${numeroNF} registrada: ${paraBaixar.length} item(ns) baixado(s) e saldo do empenho atualizado.`;
+  await sincronizarStatusNE(ne);
+  const finalizou = statusDoNE(ne)==='finalizado';
+  msg.className='msg ok'; msg.textContent=`Nota fiscal ${numeroNF} registrada: ${paraBaixar.length} item(ns) baixado(s) e saldo do empenho atualizado.` +
+    (finalizou ? ' O saldo do empenho chegou a zero: status alterado automaticamente para Finalizado.' : '');
   document.getElementById('nf-numero').value='';
   document.getElementById('nf-ne').value='';
   document.getElementById('nf-itens-wrap').classList.add('hidden');
@@ -2047,6 +2304,7 @@ window.removerItemNF = async function(id){
   if(!nf) return;
   if(!confirm('Excluir este item da nota fiscal? O saldo do empenho correspondente será devolvido.')) return;
   const e = empenhos.find(x=>x.id===nf.empenhoId);
+  if(e){ const c = checarOp(e.numero,'estornoNF'); if(!c.ok){ alert(c.msg); return; } }
   try{
     if(e){
       const novoSaldoQtd = Math.min(arredQtd(e.saldoQtd + nf.qtd), e.qtd);
@@ -2057,6 +2315,7 @@ window.removerItemNF = async function(id){
     await deleteDoc(doc(db,'notasFiscais',id));
   }catch(err){ alert('Erro ao excluir: '+err.message); return; }
   notasFiscais = notasFiscais.filter(n=>n.id!==id);
+  if(e) await sincronizarStatusNE(e.numero);
   renderHistorico();
 };
 
@@ -2072,6 +2331,11 @@ window.removerNF = async function(numeroNF, numeroEmpenho){
     porEmpenho[nf.empenhoId].valor += nf.valorBaixado;
   });
 
+  for(const empenhoId in porEmpenho){
+    const ee = empenhos.find(x=>x.id===empenhoId);
+    if(ee){ const c = checarOp(ee.numero,'estornoNF'); if(!c.ok){ alert(c.msg); return; } }
+  }
+
   try{
     for(const empenhoId in porEmpenho){
       const e = empenhos.find(x=>x.id===empenhoId);
@@ -2085,6 +2349,7 @@ window.removerNF = async function(numeroNF, numeroEmpenho){
   }catch(err){ alert('Erro ao excluir: '+err.message); return; }
 
   notasFiscais = notasFiscais.filter(n=>!(n.numeroNF===numeroNF && n.numeroEmpenho===numeroEmpenho));
+  for(const nomeNE of [...new Set(Object.keys(porEmpenho).map(id=>(empenhos.find(x=>x.id===id)||{}).numero).filter(Boolean))]) await sincronizarStatusNE(nomeNE);
   renderHistorico();
 };
 
@@ -2140,7 +2405,9 @@ document.getElementById('ped-empresa').addEventListener('change', ()=>{
   info.classList.remove('hidden');
 
   // itens com saldo disponível, agrupados por número de empenho (NE)
-  const itensDaEmpresa = empenhos.filter(x=>x.empresa===e.nome && x.saldoQtd>0);
+  const itensComSaldo = empenhos.filter(x=>x.empresa===e.nome && x.saldoQtd>0);
+  const itensDaEmpresa = itensComSaldo.filter(x=>PERMISSOES_STATUS[statusDoNE(x.numero)].pedido);
+  const nesBloqueados = [...new Set(itensComSaldo.filter(x=>!PERMISSOES_STATUS[statusDoNE(x.numero)].pedido).map(x=>x.numero))];
   if(itensDaEmpresa.length===0){
     lista.innerHTML = `<div class="empty">Nenhum empenho com saldo disponível para essa empresa.</div>`;
   } else {
@@ -2168,6 +2435,9 @@ document.getElementById('ped-empresa').addEventListener('change', ()=>{
           </table>
         </div>
       </div>`).join('');
+  }
+  if(nesBloqueados.length){
+    lista.insertAdjacentHTML('afterbegin', `<div class="msg err" style="margin-bottom:10px">Indisponíveis para novos pedidos: ${nesBloqueados.map(n=>n+' ('+STATUS_INFO[statusDoNE(n)].nome+')').join(', ')}.</div>`);
   }
   wrapItens.classList.remove('hidden');
   wrapDetalhes.classList.remove('hidden');
@@ -2260,7 +2530,10 @@ document.getElementById('btn-gerar-pedido').addEventListener('click', async ()=>
     if(!marcado) return;
     const e = empenhos.find(x=>x.id===tr.dataset.id);
     if(!e) return;
-    const q = parseQtd(tr.querySelector('.ped-item-qtd').value);
+    const q0 = parseQtd(tr.querySelector('.ped-item-qtd').value);
+    if(q0.vazio || (q0.valor!==undefined && q0.valor<=0)) return;
+    { const c = checarOp(e.numero,'pedido'); if(!c.ok){ erroPed = c.msg; return; } }
+    const q = q0;
     if(q.vazio || (q.valor!==undefined && q.valor<=0)) return;
     if(q.erro){ erroPed = `"${e.item}": ${q.erro}`; return; }
     const qtd = q.valor;

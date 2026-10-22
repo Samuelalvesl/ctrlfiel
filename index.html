@@ -176,6 +176,15 @@ tr:last-child td{border-bottom:none}
 .login-wrap{position:relative; overflow:hidden; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; background:var(--bg)}
 .login-card{position:relative; z-index:1; background:rgba(255,255,255,.84); backdrop-filter:blur(1.5px); border:1px solid var(--line); border-radius:var(--radius); padding:30px; width:100%; max-width:400px; box-shadow:var(--shadow); border-top:5px solid var(--blue)}
 .login-marca{position:absolute; left:50%; top:50%; width:min(920px,115vw); transform:translate(-50%,-50%); opacity:.13; pointer-events:none; z-index:0}
+/* perfil Operador (restrito): oculta ações de edição fora de NF e Pedidos */
+body.perfil-restrito button[onclick^="abrirEdicaoNE"], body.perfil-restrito button[onclick^="abrirEdicaoItem"],
+body.perfil-restrito button[onclick^="removerEmpenho"], body.perfil-restrito button[onclick^="removerItemNF"],
+body.perfil-restrito button[onclick^="removerNF"], body.perfil-restrito button[onclick^="editarEmpresa"],
+body.perfil-restrito button[onclick^="removerEmpresa"], body.perfil-restrito button[onclick^="editarAssinatura"],
+body.perfil-restrito button[onclick^="removerAssinatura"], body.perfil-restrito .sel-status,
+body.perfil-restrito .btn-cel-renomear, body.perfil-restrito .btn-cel-excluir{display:none !important}
+.aviso-restrito{margin:0; padding:9px 24px; background:var(--bg2); border-bottom:1px solid var(--line); color:var(--navy); font-size:.82rem}
+.resp-acao{color:var(--text-2); font-size:.78rem}
 .login-card h1{font-size:2.1rem; margin:0 0 6px; font-weight:700; letter-spacing:.1em; color:var(--navy)}
 .login-card .login-sub{color:var(--navy); font-size:.84rem; font-weight:600; margin:0 0 4px; line-height:1.35}
 .login-card .login-slogan{color:var(--amber-dark); font-size:.8rem; font-style:italic; margin:0 0 16px}
@@ -323,6 +332,8 @@ tr:last-child td{border-bottom:none}
   </div>
 </div>
 
+<div id="aviso-restrito" class="aviso-restrito hidden"><b>Perfil Operador:</b> você pode registrar Notas Fiscais e usar todas as funções de Pedidos. As demais áreas são somente para consulta.</div>
+
 <main>
 
   <section id="tab-cadastro" class="tab">
@@ -468,7 +479,7 @@ tr:last-child td{border-bottom:none}
       <input class="search" id="busca-pedido" placeholder="Buscar por número do pedido ou empresa...">
       <div class="tablewrap">
         <table id="tbl-pedidos">
-          <thead><tr><th>Nº Pedido</th><th>Empresa</th><th>Data</th><th>Valor total</th><th></th></tr></thead>
+          <thead><tr><th>Nº Pedido</th><th>Empresa</th><th>Data</th><th>Valor total</th><th>Responsável pela Ação</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -595,6 +606,7 @@ tr:last-child td{border-bottom:none}
         <div class="grid">
           <div class="field"><label>Email</label><input id="user-email-novo" type="email" placeholder="pessoa@exemplo.com"></div>
           <div class="field"><label>Créditos iniciais (1 crédito = 1 dia de acesso)</label><input id="user-creditos-novo" type="number" min="0" step="1" placeholder="Ex: 30"></div>
+          <div class="field"><label>Perfil de acesso</label><select id="user-perfil-novo"><option value="">Usuário padrão</option><option value="operador">Operador (registra NF e usa Pedidos; demais áreas só consulta)</option></select></div>
         </div>
         <div class="actions">
           <button class="primary" id="btn-autorizar-usuario">Autorizar usuário</button>
@@ -706,7 +718,8 @@ function nfFromDoc(d){
   const r = d.data();
   return { id:d.id, numeroNF:r.numeroNF, data:r.data, empenhoId:r.empenhoId, numeroEmpenho:r.numeroEmpenho,
     item:r.item, qtd:Number(r.quantidade), valorBaixado:Number(r.valorBaixado),
-    saldoAposQtd:Number(r.saldoQtdApos), saldoAposValor:Number(r.saldoValorApos), createdAt:Number(r.createdAt)||0 };
+    saldoAposQtd:Number(r.saldoQtdApos), saldoAposValor:Number(r.saldoValorApos), createdAt:Number(r.createdAt)||0,
+    responsavelEmail:r.responsavelEmail||'' };
 }
 function empresaFromDoc(d){
   const r = d.data();
@@ -722,13 +735,13 @@ function pedidoFromDoc(d){
     empresaCnpj:r.empresaCnpj||'', empresaEndereco:r.empresaEndereco||'', empresaTelefone:r.empresaTelefone||'', empresaEmail:r.empresaEmail||'',
     numeroEmpenho:r.numeroEmpenho||'', itens:r.itens||[], valorTotal:Number(r.valorTotal)||0,
     obs:r.obs||'', contato:r.contato||'', prazoRecebimento:r.prazoRecebimento||'',
-    assinatura1:r.assinatura1||null, assinatura2:r.assinatura2||null };
+    assinatura1:r.assinatura1||null, assinatura2:r.assinatura2||null, responsavelEmail:r.responsavelEmail||'' };
 }
 
 function documentoFromDoc(d){
   const r = d.data();
   return { id:d.id, empresaId:r.empresaId||'', empresaNome:r.empresaNome||'', nome:r.nome||'',
-    nomeArquivo:r.nomeArquivo||'', tipoArquivo:r.tipoArquivo||'', tamanho:Number(r.tamanho)||0 };
+    nomeArquivo:r.nomeArquivo||'', tipoArquivo:r.tipoArquivo||'', tamanho:Number(r.tamanho)||0, responsavelEmail:r.responsavelEmail||'' };
 }
 
 let empresas = [];
@@ -738,10 +751,39 @@ let assinaturas = [];
 let pedidos = [];
 let documentos = [];
 let configOM = '';
+
+// ---- Perfil Operador (restrito) ----
+function ehRestrito(){ return !!(usuarioAutorizacao && usuarioAutorizacao.perfil==='operador'); }
+// dono dos dados: o Operador trabalha sobre os dados do administrador que o autorizou (donoUid)
+function uidDono(){ return (ehRestrito() && usuarioAutorizacao.donoUid) ? usuarioAutorizacao.donoUid : usuarioAtual.uid; }
+function responsavelAcao(){ return { responsavelUid: usuarioAtual.uid, responsavelEmail: (usuarioAtual.email||'').toLowerCase() }; }
+function bloquearRestrito(){
+  if(ehRestrito()){ alert('Seu perfil (Operador) permite apenas consulta nesta área.'); return true; }
+  return false;
+}
+async function registrarAuditoria(acao, detalhe){
+  if(!ehRestrito()) return;
+  try{
+    await addDoc(collection(db,'auditoria'), { acao, detalhe:detalhe||'', usuarioUid:usuarioAtual.uid,
+      usuarioEmail:(usuarioAtual.email||'').toLowerCase(), donoUid:uidDono(), createdAt:Date.now() });
+  }catch(e){ console.error('Falha ao registrar auditoria:', e.code, e.message); }
+}
+function aplicarPerfilNaTela(){
+  const r = ehRestrito();
+  document.body.classList.toggle('perfil-restrito', r);
+  document.getElementById('aviso-restrito').classList.toggle('hidden', !r);
+  if(!r) return;
+  document.getElementById('card-multi').classList.add('hidden');
+  ['btn-cred-lancar','btn-salvar-empresa','btn-salvar-assinatura'].forEach(id=>{
+    const c = document.getElementById(id).closest('.card'); if(c) c.classList.add('hidden');
+  });
+  const g = document.getElementById('cel-nome').closest('.grid'); if(g) g.classList.add('hidden');
+  const a = document.getElementById('btn-cel-cadastrar').closest('.actions'); if(a) a.classList.add('hidden');
+}
 let configLogo = '';
 
 async function carregarDados(){
-  const uidAtual = usuarioAtual.uid;
+  const uidAtual = uidDono();
   const [empSnap, nfSnap, empresaSnap, assinaturaSnap, pedidoSnap, docSnap] = await Promise.all([
     getDocs(query(collection(db,'empenhos'), where('userId','==',uidAtual))),
     getDocs(query(collection(db,'notasFiscais'), where('userId','==',uidAtual))),
@@ -902,7 +944,8 @@ async function mostrarApp(user){
   usuarioAutorizacao = autorizacao;
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app-wrap').classList.remove('hidden');
-  document.getElementById('user-email').textContent = user.email + (autorizacao.isAdmin ? ' (admin)' : '');
+  document.getElementById('user-email').textContent = user.email + (autorizacao.isAdmin ? ' (admin)' : (autorizacao.perfil==='operador' ? ' (operador)' : ''));
+  aplicarPerfilNaTela();
   try{
     await carregarDados();
   }catch(err){
@@ -1084,6 +1127,7 @@ function addLinhaMulti(){
 document.getElementById('btn-add-linha').addEventListener('click', addLinhaMulti);
 
 document.getElementById('btn-salvar-multi').addEventListener('click', async ()=>{
+  if(bloquearRestrito()) return;
   const pregao = document.getElementById('m-pregao').value.trim();
   const vigencia = document.getElementById('m-vigencia').value || null;
   const numero = document.getElementById('m-numero').value.trim();
@@ -1288,6 +1332,7 @@ function msgCart(id, texto, ok){ const m=document.getElementById(id); m.classNam
 
 let cadastrandoCelula = false;
 document.getElementById('btn-cel-cadastrar').addEventListener('click', async ()=>{
+  if(bloquearRestrito()) return;
   if(cadastrandoCelula) return;
   const nome = document.getElementById('cel-nome').value.trim();
   if(!nome){ msgCart('msg-cel','Informe o nome ou a identificação da célula.',false); return; }
@@ -1305,6 +1350,7 @@ document.getElementById('btn-cel-cadastrar').addEventListener('click', async ()=
 });
 
 document.querySelector('#tbl-celulas tbody').addEventListener('click', async (ev)=>{
+  if(ehRestrito()) return;
   const tr = ev.target.closest('tr[data-id]'); if(!tr) return;
   const c = celulas.find(x=>x.id===tr.dataset.id); if(!c) return;
   if(ev.target.closest('.btn-cel-renomear')){
@@ -1334,6 +1380,7 @@ document.querySelector('#tbl-celulas tbody').addEventListener('click', async (ev
 
 let lancandoCredito = false;
 document.getElementById('btn-cred-lancar').addEventListener('click', async ()=>{
+  if(bloquearRestrito()) return;
   if(lancandoCredito) return;
   const celulaId = document.getElementById('cred-celula').value;
   const v = parseMoeda(document.getElementById('cred-valor').value);
@@ -1417,6 +1464,7 @@ async function sincronizarStatusNE(numero){
 
 let statusTrocando = false;
 async function alterarStatusNE(ne, novo){
+  if(ehRestrito()){ renderSaldos(); renderSelectNE(); return; }
   if(statusTrocando) return;
   const itens = empenhos.filter(e=>e.numero===ne);
   if(itens.length===0) return;
@@ -1455,6 +1503,7 @@ function fecharCancelamento(){ document.getElementById('cancel-modal').classList
 document.getElementById('btn-fechar-cancel').addEventListener('click', fecharCancelamento);
 
 function abrirCancelamento(ne){
+  if(bloquearRestrito()) return;
   const itens = empenhos.filter(e=>e.numero===ne);
   if(itens.length===0) return;
   if(statusDeItens(itens)==='cancelado'){ alert('Este empenho já foi cancelado.'); return; }
@@ -1486,6 +1535,7 @@ function abrirCancelamento(ne){
 }
 
 document.getElementById('btn-confirmar-cancel').addEventListener('click', async ()=>{
+  if(bloquearRestrito()) return;
   if(cancelando || !cancelamentoAtual) return;
   const { ne, celulaVinculadaId } = cancelamentoAtual;
   const itens = empenhos.filter(e=>e.numero===ne);
@@ -1690,6 +1740,7 @@ function renderSaldos(){
 document.getElementById('busca-saldo').addEventListener('input', renderSaldos);
 
 window.removerEmpenho = async function(id){
+  if(bloquearRestrito()) return;
   const it = empenhos.find(e=>e.id===id);
   if(it){ const c = checarOp(it.numero,'excluir'); if(!c.ok){ alert(c.msg); return; } }
   const avisoCel = it && it.celulaId ? `\n\nATENÇÃO: este empenho está vinculado à célula de crédito "${celulaNomeDe(it)}". O valor já deduzido NÃO será devolvido automaticamente ao saldo da célula.` : '';
@@ -1701,6 +1752,7 @@ window.removerEmpenho = async function(id){
 };
 
 window.removerEmpenhoCompleto = async function(ne){
+  if(bloquearRestrito()) return;
   const itens = empenhos.filter(e=>e.numero===ne);
   if(itens.length===0) return;
   { const c = checarOp(ne,'excluir'); if(!c.ok){ alert(c.msg); return; } }
@@ -1737,6 +1789,7 @@ function msgEdicao(texto, ok){
 }
 
 window.abrirEdicaoNE = function(idPrimeiroItem){
+  if(bloquearRestrito()) return;
   const ref = empenhos.find(e=>e.id===idPrimeiroItem);
   if(!ref) return;
   { const c = checarOp(ref.numero,'editar'); if(!c.ok){ alert(c.msg); return; } }
@@ -1767,6 +1820,7 @@ window.abrirEdicaoNE = function(idPrimeiroItem){
 };
 
 window.abrirEdicaoItem = function(id){
+  if(bloquearRestrito()) return;
   const e = empenhos.find(x=>x.id===id);
   if(!e) return;
   { const c = checarOp(e.numero,'editar'); if(!c.ok){ alert(c.msg); return; } }
@@ -1793,6 +1847,7 @@ window.abrirEdicaoItem = function(id){
 };
 
 document.getElementById('btn-salvar-edicao').addEventListener('click', async ()=>{
+  if(bloquearRestrito()) return;
   if(!edicaoAtual) return;
   const btn = document.getElementById('btn-salvar-edicao');
   btn.disabled = true;
@@ -2004,15 +2059,16 @@ document.getElementById('btn-baixar').addEventListener('click', async ()=>{
       const nfData = {
         numeroNF, data, empenhoId:e.id, numeroEmpenho:e.numero, item:e.item,
         quantidade:qtd, valorBaixado, saldoQtdApos:novoSaldoQtd, saldoValorApos:novoSaldoValor,
-        userId: usuarioAtual.uid, createdAt: criadoEm
+        userId: uidDono(), ...responsavelAcao(), createdAt: criadoEm
       };
       const ref = await addDoc(collection(db,'notasFiscais'), nfData);
 
       e.saldoQtd = novoSaldoQtd;
       e.saldoValor = novoSaldoValor;
       notasFiscais.push({ id:ref.id, numeroNF, data, empenhoId:e.id, numeroEmpenho:e.numero, item:e.item,
-        qtd, valorBaixado, saldoAposQtd:novoSaldoQtd, saldoAposValor:novoSaldoValor, createdAt:criadoEm });
+        qtd, valorBaixado, saldoAposQtd:novoSaldoQtd, saldoAposValor:novoSaldoValor, createdAt:criadoEm, responsavelEmail:nfData.responsavelEmail });
     }
+    await registrarAuditoria('Registrou nota fiscal', `NF ${numeroNF} · NE ${ne} · ${paraBaixar.length} item(ns)`);
   }catch(err){
     msg.className='msg err'; msg.textContent='Erro ao registrar: '+err.message;
     return;
@@ -2109,6 +2165,7 @@ document.getElementById('emp-telefone').addEventListener('input', (e)=>{
 });
 
 document.getElementById('btn-salvar-empresa').addEventListener('click', async ()=>{
+  if(bloquearRestrito()) return;
   const msg = document.getElementById('msg-empresa');
   const idEditando = document.getElementById('empresa-editando-id').value;
   const nome = document.getElementById('emp-nome').value.trim();
@@ -2148,6 +2205,7 @@ document.getElementById('btn-salvar-empresa').addEventListener('click', async ()
 });
 
 window.editarEmpresa = function(id){
+  if(bloquearRestrito()) return;
   const e = empresas.find(x=>x.id===id);
   if(!e) return;
   document.getElementById('empresa-editando-id').value = e.id;
@@ -2172,6 +2230,7 @@ function cancelarEdicaoEmpresa(){
 document.getElementById('btn-cancelar-edicao-empresa').addEventListener('click', cancelarEdicaoEmpresa);
 
 window.removerEmpresa = async function(id){
+  if(bloquearRestrito()) return;
   if(!confirm('Excluir esta empresa? Empenhos e pedidos já criados não serão afetados.')) return;
   try{ await deleteDoc(doc(db,'empresas',id)); }
   catch(err){ alert('Erro ao excluir: '+err.message); return; }
@@ -2197,6 +2256,7 @@ function renderAssinaturas(){
 }
 
 document.getElementById('btn-salvar-assinatura').addEventListener('click', async ()=>{
+  if(bloquearRestrito()) return;
   const msg = document.getElementById('msg-assinatura');
   const idEditando = document.getElementById('assinatura-editando-id').value;
   const nome = document.getElementById('assin-nome').value.trim();
@@ -2225,6 +2285,7 @@ document.getElementById('btn-salvar-assinatura').addEventListener('click', async
 });
 
 window.editarAssinatura = function(id){
+  if(bloquearRestrito()) return;
   const a = assinaturas.find(x=>x.id===id);
   if(!a) return;
   document.getElementById('assinatura-editando-id').value = a.id;
@@ -2246,6 +2307,7 @@ function cancelarEdicaoAssinatura(){
 document.getElementById('btn-cancelar-edicao-assinatura').addEventListener('click', cancelarEdicaoAssinatura);
 
 window.removerAssinatura = async function(id){
+  if(bloquearRestrito()) return;
   if(!confirm('Excluir esta assinatura?')) return;
   try{ await deleteDoc(doc(db,'assinaturas',id)); }
   catch(err){ alert('Erro ao excluir: '+err.message); return; }
@@ -2325,13 +2387,14 @@ function renderHistorico(){
       return `
       <tr>
         <td>${g.numeroNF}</td><td>${g.data}</td><td>${g.numeroEmpenho}</td><td>${fmtMoney(valorTotalNF)}</td>
+        <td class="resp-acao">${g.itens[0].responsavelEmail||'—'}</td>
         <td style="display:flex; gap:8px">
           <button class="btn-link" onclick="document.getElementById('${detailId}').classList.toggle('hidden')">Detalhar</button>
           <button class="danger" onclick="removerNF('${g.numeroNF.replace(/'/g,"\\'")}','${g.numeroEmpenho.replace(/'/g,"\\'")}')">Excluir NF</button>
         </td>
       </tr>
       <tr class="nf-detail-row hidden" id="${detailId}">
-        <td colspan="5">
+        <td colspan="6">
           <div class="nf-detail-inner">
             <div class="tablewrap">
               <table>
@@ -2358,7 +2421,7 @@ function renderHistorico(){
       <div class="empresa-conteudo ${abrirPorBusca?'':'hidden'}" id="${containerId}">
         <div class="tablewrap">
           <table>
-            <thead><tr><th>NF nº</th><th>Data</th><th>Nota de empenho</th><th>Valor total da NF</th><th></th></tr></thead>
+            <thead><tr><th>NF nº</th><th>Data</th><th>Nota de empenho</th><th>Valor total da NF</th><th>Responsável pela Ação</th><th></th></tr></thead>
             <tbody>${linhasNF}</tbody>
           </table>
         </div>
@@ -2369,6 +2432,7 @@ function renderHistorico(){
 document.getElementById('busca-historico').addEventListener('input', renderHistorico);
 
 window.removerItemNF = async function(id){
+  if(bloquearRestrito()) return;
   const nf = notasFiscais.find(n=>n.id===id);
   if(!nf) return;
   if(!confirm('Excluir este item da nota fiscal? O saldo do empenho correspondente será devolvido.')) return;
@@ -2389,6 +2453,7 @@ window.removerItemNF = async function(id){
 };
 
 window.removerNF = async function(numeroNF, numeroEmpenho){
+  if(bloquearRestrito()) return;
   if(!confirm(`Excluir a nota fiscal ${numeroNF} inteira? O saldo de todos os itens dela será devolvido ao empenho.`)) return;
   const doGrupo = notasFiscais.filter(n=>n.numeroNF===numeroNF && n.numeroEmpenho===numeroEmpenho);
 
@@ -2630,8 +2695,9 @@ document.getElementById('btn-gerar-pedido').addEventListener('click', async ()=>
   };
 
   try{
-    const ref = await addDoc(collection(db,'pedidos'), { ...pedidoData, userId: usuarioAtual.uid, createdAt: Date.now() });
-    pedidos.push({ id:ref.id, ...pedidoData });
+    const ref = await addDoc(collection(db,'pedidos'), { ...pedidoData, userId: uidDono(), ...responsavelAcao(), createdAt: Date.now() });
+    pedidos.push({ id:ref.id, ...pedidoData, responsavelEmail: responsavelAcao().responsavelEmail });
+    await registrarAuditoria('Gerou pedido', `Pedido ${pedidoData.numeroPedido} · ${pedidoData.empresaNome}`);
   }catch(err){ msg.className='msg err'; msg.textContent='Erro ao salvar pedido: '+err.message; return; }
 
   try{
@@ -2650,12 +2716,12 @@ function renderPedidos(){
   const q = (document.getElementById('busca-pedido').value||'').toLowerCase();
   const rows = pedidos.filter(p => !q || p.numeroPedido.toLowerCase().includes(q) || p.empresaNome.toLowerCase().includes(q));
   if(rows.length===0){
-    tbody.innerHTML = `<tr><td colspan="5" class="empty">Nenhum pedido gerado ainda.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">Nenhum pedido gerado ainda.</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.slice().reverse().map(p=>`
     <tr>
-      <td>${p.numeroPedido}</td><td>${p.empresaNome}</td><td>${p.dataEmissao}</td><td>${fmtMoney(p.valorTotal)}</td>
+      <td>${p.numeroPedido}</td><td>${p.empresaNome}</td><td>${p.dataEmissao}</td><td>${fmtMoney(p.valorTotal)}</td><td class="resp-acao">${p.responsavelEmail||'—'}</td>
       <td style="display:flex; gap:8px">
         <button class="btn-link" onclick="verPDFPedido('${p.id}')">Ver PDF</button>
         <button class="danger" onclick="removerPedido('${p.id}')">Excluir</button>
@@ -2678,8 +2744,10 @@ window.verPDFPedido = function(id){
 
 window.removerPedido = async function(id){
   if(!confirm('Excluir este pedido do histórico?')) return;
+  const pedExcl = pedidos.find(p=>p.id===id);
   try{ await deleteDoc(doc(db,'pedidos',id)); }
   catch(err){ alert('Erro ao excluir: '+err.message); return; }
+  await registrarAuditoria('Excluiu pedido', pedExcl ? `Pedido ${pedExcl.numeroPedido} · ${pedExcl.empresaNome}` : id);
   pedidos = pedidos.filter(p=>p.id!==id);
   renderPedidos();
 };
@@ -2729,10 +2797,11 @@ document.getElementById('btn-enviar-doc').addEventListener('click', async ()=>{
     const base64 = await arquivoParaBase64(arquivo);
     const metaRef = await addDoc(collection(db,'documentos'), {
       empresaId, empresaNome:empresa.nome, nome, nomeArquivo:arquivo.name, tipoArquivo:arquivo.type,
-      tamanho:arquivo.size, userId: usuarioAtual.uid, createdAt: Date.now()
+      tamanho:arquivo.size, userId: uidDono(), ...responsavelAcao(), createdAt: Date.now()
     });
-    await setDoc(doc(db,'documentosConteudo',metaRef.id), { dataBase64: base64, userId: usuarioAtual.uid });
-    documentos.push({ id:metaRef.id, empresaId, empresaNome:empresa.nome, nome, nomeArquivo:arquivo.name, tipoArquivo:arquivo.type, tamanho:arquivo.size });
+    await setDoc(doc(db,'documentosConteudo',metaRef.id), { dataBase64: base64, userId: uidDono() });
+    documentos.push({ id:metaRef.id, empresaId, empresaNome:empresa.nome, nome, nomeArquivo:arquivo.name, tipoArquivo:arquivo.type, tamanho:arquivo.size, responsavelEmail: responsavelAcao().responsavelEmail });
+    await registrarAuditoria('Enviou documento', `${nome} · ${empresa.nome}`);
     msg.className='msg ok'; msg.textContent='Documento enviado com sucesso.';
     document.getElementById('doc-nome').value='';
     inputArquivo.value='';
@@ -2770,7 +2839,7 @@ function renderDocumentos(){
       <div class="doc-item">
         <div class="doc-info">
           <div class="doc-nome">${d.nome}</div>
-          <div class="doc-meta">${d.nomeArquivo} • ${fmtTamanho(d.tamanho)}</div>
+          <div class="doc-meta">${d.nomeArquivo} • ${fmtTamanho(d.tamanho)} • <span class="resp-acao">Responsável pela Ação: ${d.responsavelEmail||'—'}</span></div>
         </div>
         <div class="doc-acoes">
           <button class="btn-link" onclick="abrirDocumento('${d.id}')">Abrir</button>
@@ -2824,7 +2893,8 @@ window.editarDocumento = async function(id){
   const novoNome = prompt('Nome/descrição do documento:', d.nome);
   if(novoNome===null || !novoNome.trim()) return;
   try{
-    await updateDoc(doc(db,'documentos',id), { nome: novoNome.trim() });
+    await updateDoc(doc(db,'documentos',id), { nome: novoNome.trim(), alteradoPorEmail:(usuarioAtual.email||'').toLowerCase(), alteradoPorUid:usuarioAtual.uid, alteradoEm:Date.now() });
+    await registrarAuditoria('Renomeou documento', `${d.nome} → ${novoNome.trim()}`);
     d.nome = novoNome.trim();
     renderDocumentos();
   }catch(err){ alert('Erro ao editar: '+err.message); }
@@ -2835,6 +2905,7 @@ window.removerDocumento = async function(id){
   try{
     await deleteDoc(doc(db,'documentos',id));
     await deleteDoc(doc(db,'documentosConteudo',id));
+    await registrarAuditoria('Excluiu documento', (documentos.find(x=>x.id===id)||{}).nome||id);
   }catch(err){ alert('Erro ao excluir: '+err.message); return; }
   documentos = documentos.filter(d=>d.id!==id);
   renderDocumentos();
@@ -2867,6 +2938,7 @@ function renderOMeLogo(){
 }
 
 document.getElementById('btn-salvar-om').addEventListener('click', async ()=>{
+  if(bloquearRestrito()) return;
   const msg = document.getElementById('msg-om');
   const nome = document.getElementById('om-nome').value.trim();
   try{
@@ -2878,6 +2950,7 @@ document.getElementById('btn-salvar-om').addEventListener('click', async ()=>{
 
 const LIMITE_LOGO = 500*1024; // ~500KB (precisa caber no limite de 1MB do documento do Firestore, após conversão)
 document.getElementById('btn-salvar-logo').addEventListener('click', async ()=>{
+  if(bloquearRestrito()) return;
   const msg = document.getElementById('msg-logo');
   const arquivo = document.getElementById('logo-arquivo').files[0];
   if(!arquivo){ msg.className='msg err'; msg.textContent='Selecione uma imagem.'; return; }
@@ -2893,6 +2966,7 @@ document.getElementById('btn-salvar-logo').addEventListener('click', async ()=>{
   }catch(err){ msg.className='msg err'; msg.textContent='Erro ao salvar: '+err.message; }
 });
 document.getElementById('btn-remover-logo').addEventListener('click', async ()=>{
+  if(bloquearRestrito()) return;
   const msg = document.getElementById('msg-logo');
   if(!confirm('Remover o logotipo salvo?')) return;
   try{
@@ -2947,7 +3021,7 @@ function renderUsuarios(){
       <button class="danger" onclick="excluirUsuario('${u.docId}')">Excluir Usuário</button>`;
     return `<tr>
       <td>${u.email}${souEu?' (você)':''}</td>
-      <td>${u.isAdmin?'Administrador':'Usuário'}</td>
+      <td>${u.isAdmin?'Administrador':(u.perfil==='operador'?'Operador':'Usuário')}</td>
       <td>${u.uid?'Sim':'Não'}</td>
       <td>${creditosHtml}<div style="display:flex; gap:6px; margin-top:4px; align-items:center">${acoesCreditos}</div></td>
       <td>${statusHtml}</td>
@@ -2957,9 +3031,11 @@ function renderUsuarios(){
 }
 
 document.getElementById('btn-autorizar-usuario').addEventListener('click', async ()=>{
+  if(bloquearRestrito()) return;
   const msg = document.getElementById('msg-usuario');
   const emailNovo = document.getElementById('user-email-novo').value.trim().toLowerCase();
   const creditosNovo = parseInt(document.getElementById('user-creditos-novo').value) || 0;
+  const perfilNovo = document.getElementById('user-perfil-novo').value;
   if(!emailNovo || !emailNovo.includes('@')){ msg.className='msg err'; msg.textContent='Informe um email válido.'; return; }
 
   try{
@@ -2967,16 +3043,18 @@ document.getElementById('btn-autorizar-usuario').addEventListener('click', async
     const snap = await getDoc(ref);
     if(snap.exists()){
       await updateDoc(ref, { status:'ativo' });
-      msg.className='msg ok'; msg.textContent='Usuário reativado com sucesso.';
+      msg.className='msg ok'; msg.textContent='Usuário reativado com sucesso (o perfil já cadastrado foi mantido).';
     } else {
       await setDoc(ref, { email:emailNovo, status:'ativo', isAdmin:false, creditos:creditosNovo,
-        ultimoDescontoEm: new Date().toISOString().slice(0,10), autorizadoPor:usuarioAtual.email, criadoEm:Date.now() });
+        ultimoDescontoEm: new Date().toISOString().slice(0,10), autorizadoPor:usuarioAtual.email, criadoEm:Date.now(),
+        ...(perfilNovo==='operador' ? { perfil:'operador', donoUid:usuarioAtual.uid } : {}) });
       msg.className='msg ok'; msg.textContent='Usuário autorizado. Ele já pode criar a conta pelo sistema.';
     }
   }catch(err){ msg.className='msg err'; msg.textContent='Erro ao autorizar: '+err.message; return; }
 
   document.getElementById('user-email-novo').value='';
   document.getElementById('user-creditos-novo').value='';
+  document.getElementById('user-perfil-novo').value='';
   carregarUsuarios();
 });
 

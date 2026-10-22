@@ -15,11 +15,11 @@
   /* azul-marinho */
   --navy:#0F1E33; --navy-2:#24364F; --navy-3:#3A4D68;
   /* âmbar */
-  --amber:#F2B33D; --amber-dark:#8A5500;
+  --amber:#8DB8F5; --amber-dark:#1D4FA8; --blue:#2F6FED; --blue-hover:#2559C7; --blue-ring:rgba(47,111,237,.28);
   /* fundos, cartões e linhas */
-  --bg:#F6F3EC; --bg2:#EDE6D6; --card:#FFFDF8; --line:#E2DACB;
+  --bg:#EEF3F9; --bg2:#DFE8F3; --card:#FFFFFF; --line:#CFDBEA;
   /* textos */
-  --text:#0F1E33; --text-2:#44536A; --on-dark:#F6F3EC; --on-dark-2:#BFCBD9;
+  --text:#0F1E33; --text-2:#44536A; --on-dark:#F2F7FD; --on-dark-2:#B9CCE3;
   /* status */
   --ok:#2E7D5B; --warn:#F2B33D; --err:#B23A3A;
   /* nomes usados pelo restante do sistema (mantidos) */
@@ -99,16 +99,16 @@ input,select{
   width:100%; padding:9px 11px; border-radius:8px; border:1px solid var(--line);
   background:#fff; color:var(--text); font-size:.9rem; font-family:var(--font-body);
 }
-input:focus,select:focus{outline:none; border-color:var(--amber); box-shadow:0 0 0 3px rgba(242,179,61,.35)}
+input:focus,select:focus{outline:none; border-color:var(--blue); box-shadow:0 0 0 3px var(--blue-ring)}
 .field{margin-bottom:2px}
 .actions{margin-top:16px; display:flex; gap:10px; align-items:center}
 
-/* botão principal (âmbar) */
+/* botão principal (azul) */
 button.primary{
-  background:var(--amber); color:var(--navy); border:1.5px solid var(--amber); padding:10px 20px;
+  background:var(--blue); color:#fff; border:1.5px solid var(--blue); padding:10px 20px;
   border-radius:8px; cursor:pointer; font-weight:700; font-size:.9rem;
 }
-button.primary:hover:not(:disabled){background:#E5A52C; border-color:#E5A52C}
+button.primary:hover:not(:disabled){background:var(--blue-hover); border-color:var(--blue-hover)}
 button.danger{background:transparent; color:var(--err); border:1.5px solid var(--err); padding:5px 10px; border-radius:8px; cursor:pointer; font-size:.75rem}
 button.danger:hover:not(:disabled){background:rgba(178,58,58,.08)}
 #btn-add-linha{background:transparent; color:var(--navy); border:1.5px solid var(--navy); padding:10px 16px; border-radius:8px; cursor:pointer; font-weight:600; font-size:.85rem}
@@ -163,7 +163,7 @@ tr:last-child td{border-bottom:none}
 .saldo-zero{color:var(--text-2); text-decoration:line-through}
 .pill{display:inline-block; padding:2px 9px; border-radius:20px; font-size:.7rem; font-weight:700}
 .pill.ok{background:rgba(46,125,91,.15); color:var(--ok)}
-.pill.warn{background:rgba(242,179,61,.28); color:var(--amber-dark)}
+.pill.warn{background:rgba(242,179,61,.28); color:#8A5500}
 .pill.off{background:var(--bg2); color:var(--text-2)}
 .empty{color:var(--text-2); font-size:.85rem; padding:20px; text-align:center}
 .search{margin-bottom:12px}
@@ -173,8 +173,9 @@ tr:last-child td{border-bottom:none}
 .hidden{display:none !important}
 
 /* login */
-.login-wrap{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; background:var(--bg)}
-.login-card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:30px; width:100%; max-width:400px; box-shadow:var(--shadow); border-top:5px solid var(--amber)}
+.login-wrap{position:relative; overflow:hidden; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; background:var(--bg)}
+.login-card{position:relative; z-index:1; background:rgba(255,255,255,.84); backdrop-filter:blur(1.5px); border:1px solid var(--line); border-radius:var(--radius); padding:30px; width:100%; max-width:400px; box-shadow:var(--shadow); border-top:5px solid var(--blue)}
+.login-marca{position:absolute; left:50%; top:50%; width:min(920px,115vw); transform:translate(-50%,-50%); opacity:.13; pointer-events:none; z-index:0}
 .login-card h1{font-size:2.1rem; margin:0 0 6px; font-weight:700; letter-spacing:.1em; color:var(--navy)}
 .login-card .login-sub{color:var(--navy); font-size:.84rem; font-weight:600; margin:0 0 4px; line-height:1.35}
 .login-card .login-slogan{color:var(--amber-dark); font-size:.8rem; font-style:italic; margin:0 0 16px}
@@ -191,6 +192,16 @@ tr:last-child td{border-bottom:none}
 <body>
 
 <div id="login-screen" class="login-wrap">
+  <svg class="login-marca" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 660" fill="none" stroke="#0F1E33" stroke-linecap="round" stroke-linejoin="round">
+<g transform="translate(130 0)" stroke-width="16">
+<circle cx="320" cy="96" r="30"/><line x1="320" y1="126" x2="320" y2="500"/><line x1="252" y1="176" x2="388" y2="176"/>
+<path d="M132 392 C 146 500, 232 548, 320 548 C 408 548, 494 500, 508 392"/></g>
+<g transform="translate(130 0)" fill="#0F1E33" stroke-width="6">
+<path d="M100 404 L132 346 L170 410 Q 134 424 100 404 Z"/><path d="M540 404 L508 346 L470 410 Q 506 424 540 404 Z"/></g>
+<path d="M426 230 Q450 214 474 230 M426 262 Q450 246 474 262 M426 294 Q450 278 474 294" stroke-width="9"/>
+<path d="M215 610 C150 520 120 400 165 250" stroke-width="8"/><path d="M200.1 587.8 C173.9 619.9 131.0 617.0 108.7 600.4 C134.1 587.1 170.4 580.8 200.1 587.8 Z M200.1 587.8 C234.4 581.9 246.5 549.3 240.8 526.2 C221.7 539.3 204.5 563.2 200.1 587.8 Z M178.6 548.3 C151.5 574.4 113.1 567.2 94.8 549.8 C119.1 540.6 152.5 538.8 178.6 548.3 Z M178.6 548.3 C210.1 546.7 224.6 518.6 221.9 497.1 C203.3 506.9 185.2 526.6 178.6 548.3 Z M161.7 505.6 C134.6 525.8 101.2 515.1 86.8 497.5 C109.6 492.0 139.5 494.2 161.7 505.6 Z M161.7 505.6 C190.0 507.7 206.0 484.2 206.1 464.8 C188.4 471.4 170.0 487.0 161.7 505.6 Z M150.0 459.7 C123.9 474.4 95.7 461.1 85.0 444.0 C105.7 441.8 131.8 447.1 150.0 459.7 Z M150.0 459.7 C174.7 464.7 191.5 445.9 193.8 428.8 C177.4 432.6 159.5 444.2 150.0 459.7 Z M144.1 410.5 C119.8 420.4 96.9 405.7 89.6 389.7 C107.7 390.0 129.8 397.6 144.1 410.5 Z M144.1 410.5 C165.0 417.7 181.6 403.3 185.5 388.8 C170.9 390.2 154.1 398.2 144.1 410.5 Z M144.6 358.2 C122.9 364.0 105.0 349.0 100.5 334.7 C115.9 336.9 133.8 345.7 144.6 358.2 Z M144.6 358.2 C161.5 366.6 177.2 356.1 182.0 344.2 C169.5 343.8 154.3 348.8 144.6 358.2 Z M152.0 302.7 C133.5 305.3 120.3 291.2 118.0 278.9 C130.4 282.3 144.3 291.3 152.0 302.7 Z M152.0 302.7 C165.1 311.3 179.0 304.2 184.3 294.9 C173.9 293.3 160.9 295.9 152.0 302.7 Z M165.0 250.0 C155.7 225.3 170.4 201.5 186.1 193.7 C185.5 212.3 177.8 235.1 165.0 250.0 Z" fill="#0F1E33" stroke="none"/>
+<path d="M685 610 C750 520 780 400 735 250" stroke-width="8"/><path d="M699.9 587.8 C659.6 578.4 643.3 538.6 648.4 511.3 C671.5 528.3 693.2 558.1 699.9 587.8 Z M699.9 587.8 C720.3 616.0 754.9 612.6 773.1 597.3 C753.0 585.9 723.9 580.9 699.9 587.8 Z M721.4 548.3 C684.1 544.2 665.1 510.0 666.7 484.9 C689.4 497.6 712.1 522.2 721.4 548.3 Z M721.4 548.3 C742.9 571.6 773.7 564.7 788.5 548.9 C769.1 540.8 742.4 539.5 721.4 548.3 Z M738.3 505.6 C704.5 506.1 683.8 477.8 682.4 455.1 C704.1 464.0 727.1 483.3 738.3 505.6 Z M738.3 505.6 C760.0 523.9 786.8 514.3 798.2 498.6 C780.0 493.5 756.0 495.4 738.3 505.6 Z M750.0 459.7 C720.3 464.0 698.8 441.4 695.0 421.6 C715.1 427.0 737.6 441.4 750.0 459.7 Z M750.0 459.7 C771.2 473.3 793.6 461.8 801.9 446.7 C785.3 444.3 764.4 448.7 750.0 459.7 Z M755.9 410.5 C730.6 417.6 709.5 400.5 703.9 383.8 C722.0 386.1 743.1 396.1 755.9 410.5 Z M755.9 410.5 C775.8 420.0 793.9 407.5 799.4 393.5 C784.7 393.3 767.1 399.4 755.9 410.5 Z M755.4 358.2 C734.8 367.0 715.0 354.7 708.5 341.1 C724.0 341.2 743.0 347.3 755.4 358.2 Z M755.4 358.2 C773.3 364.1 787.4 351.6 790.5 339.0 C778.0 340.5 763.7 347.6 755.4 358.2 Z M748.0 302.7 C731.9 312.0 714.3 303.8 707.6 293.3 C720.4 291.8 736.7 295.0 748.0 302.7 Z M748.0 302.7 C763.4 305.8 773.7 294.0 775.1 283.4 C764.9 285.8 753.8 293.1 748.0 302.7 Z M735.0 250.0 C713.6 234.5 712.8 206.6 721.6 191.4 C731.4 207.2 737.5 230.5 735.0 250.0 Z" fill="#0F1E33" stroke="none"/>
+</svg>
   <div class="login-card">
     <h1>FAROL</h1>
     <p class="login-sub">Ferramenta de Acompanhamento de Recursos, Orçamento e Liquidação</p>

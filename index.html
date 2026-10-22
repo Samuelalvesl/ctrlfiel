@@ -3,142 +3,198 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Controle de Empenhos e Estoque</title>
+<title>FAROL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Public+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.js"></script>
 <style>
+/* ===== FAROL — tema (cores, fontes, bordas, sombras e espaçamentos) ===== */
 :root{
-  --bg:#0f1720; --panel:#16212c; --panel2:#1c2a37; --line:#2a3b49;
-  --text:#e7edf3; --muted:#8fa3b3; --accent:#3d8f6f; --accent2:#c9924f; --tab-active:#2f6fed;
-  --danger:#c05a5a; --ok:#3d8f6f;
+  /* azul-marinho */
+  --navy:#0F1E33; --navy-2:#24364F; --navy-3:#3A4D68;
+  /* âmbar */
+  --amber:#F2B33D; --amber-dark:#8A5500;
+  /* fundos, cartões e linhas */
+  --bg:#F6F3EC; --bg2:#EDE6D6; --card:#FFFDF8; --line:#E2DACB;
+  /* textos */
+  --text:#0F1E33; --text-2:#44536A; --on-dark:#F6F3EC; --on-dark-2:#BFCBD9;
+  /* status */
+  --ok:#2E7D5B; --warn:#F2B33D; --err:#B23A3A;
+  /* nomes usados pelo restante do sistema (mantidos) */
+  --panel:var(--card); --panel2:var(--bg2); --muted:var(--text-2);
+  --accent:var(--amber); --accent2:var(--amber-dark); --tab-active:var(--amber); --danger:var(--err);
+  --radius:12px; --shadow:0 1px 2px rgba(15,30,51,.06), 0 6px 18px rgba(15,30,51,.06);
+  --font-title:'Oswald','Arial Narrow',system-ui,sans-serif;
+  --font-body:'Public Sans','Segoe UI',system-ui,-apple-system,sans-serif;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   box-sizing:border-box;
-}
-@media (prefers-color-scheme: light){
-  :root:not([data-theme="dark"]){
-    --bg:#f4f6f8; --panel:#ffffff; --panel2:#eef2f5; --line:#dbe2e8;
-    --text:#1b2530; --muted:#5c6b78;
-  }
 }
 *{box-sizing:border-box}
 html{scroll-padding-top: env(safe-area-inset-top, 0px);}
 body{
   margin:0; background:var(--bg); color:var(--text);
-  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
-  font-size:15px; line-height:1.45;
+  font-family:var(--font-body);
+  font-size:15px; line-height:1.5;
 }
+h1,h2{font-family:var(--font-title)}
+td, th, .totais strong, .summary strong, .empresa-header .totais strong{font-variant-numeric:tabular-nums}
+
+/* botão base (secundário: contorno azul-marinho) */
+button{
+  font-family:var(--font-body); color:var(--navy); background:transparent;
+  border:1.5px solid var(--navy); border-radius:8px; padding:7px 14px;
+  font-size:.82rem; font-weight:600; cursor:pointer;
+  transition:background .12s, color .12s, border-color .12s;
+}
+button:hover:not(:disabled){background:var(--bg2)}
+
+/* cabeçalho */
 header{
-  padding:18px 20px 14px; border-bottom:1px solid var(--line);
-  position:sticky; top:env(safe-area-inset-top,0px); background:var(--bg); z-index:10;
+  padding:18px 24px 14px; background:var(--navy); color:var(--on-dark);
+  border-bottom:1px solid var(--navy-2);
+  position:sticky; top:env(safe-area-inset-top,0px); z-index:10;
 }
-header h1{margin:0 0 4px; font-size:1.3rem; font-weight:700; letter-spacing:.2px}
-header p{margin:0; color:var(--muted); font-size:.85rem}
-nav{display:flex; gap:6px; padding:12px 20px 0; flex-wrap:wrap}
+header h1{margin:0 0 4px; font-size:1.7rem; font-weight:700; letter-spacing:.09em; color:var(--on-dark)}
+header p{margin:0; color:var(--on-dark-2); font-size:.85rem}
+header .head-row{display:flex; justify-content:space-between; align-items:flex-start; gap:12px}
+#user-email{color:var(--on-dark-2); font-size:.78rem; margin-bottom:6px}
+#btn-perfil, #btn-sair{
+  background:transparent; border:1px solid var(--navy-3); color:var(--on-dark);
+  padding:6px 12px; border-radius:8px; cursor:pointer; font-size:.78rem; white-space:nowrap;
+}
+#btn-perfil:hover:not(:disabled), #btn-sair:hover:not(:disabled){background:var(--navy-2); border-color:var(--on-dark-2)}
+
+/* abas / menu */
+nav{display:flex; gap:6px; padding:12px 24px 0; flex-wrap:wrap; background:var(--navy); border-bottom:3px solid var(--amber)}
 nav button{
-  background:var(--panel); border:1px solid var(--line); color:var(--muted);
-  padding:9px 14px; border-radius:7px; cursor:pointer; font-size:.85rem; font-weight:600;
+  background:transparent; border:none; color:var(--on-dark-2);
+  padding:10px 20px; border-radius:8px 8px 0 0; cursor:pointer; font-size:.88rem; font-weight:700;
 }
-nav button.active{background:var(--tab-active); color:#fff; border-color:var(--tab-active)}
-#submenu{display:flex; gap:6px; padding:10px 20px 0; flex-wrap:wrap}
+nav button:hover:not(:disabled){background:var(--navy-2); color:var(--on-dark)}
+nav button.active{background:var(--amber); color:var(--navy)}
+#submenu{display:flex; gap:6px; padding:12px 24px 0; flex-wrap:wrap}
 #submenu .submenu-grupo{display:flex; gap:6px; flex-wrap:wrap}
-.submenu-btn{background:transparent; border:1px solid var(--line); color:var(--muted); padding:7px 14px; border-radius:7px; cursor:pointer; font-size:.82rem; font-weight:600}
-.submenu-btn.active{background:var(--panel); color:var(--tab-active); border-color:var(--tab-active)}
+.submenu-btn{background:transparent; border:1.5px solid var(--navy); color:var(--navy); padding:7px 16px; border-radius:8px; cursor:pointer; font-size:.82rem; font-weight:600}
+.submenu-btn:hover:not(:disabled){background:var(--bg2)}
+.submenu-btn.active{background:var(--navy); color:var(--on-dark); border-color:var(--navy); box-shadow:inset 0 -3px 0 var(--amber)}
 button:disabled, button.danger:disabled{opacity:.4; cursor:not-allowed}
+
+/* status do empenho */
 .st-badge{display:inline-block; padding:3px 11px; border-radius:999px; font-size:.72rem; font-weight:700; color:#fff; border:1px solid transparent; letter-spacing:.2px}
-.st-ativo{background:#2e9e5b}
-.st-processamento{background:#7c3aed}
-.st-finalizado{background:#d63a3a}
-.st-a_cancelar{background:#f5c518; color:#1b1b1b}
-.st-cancelado{background:#000; color:#fff; border-color:#7a8793}
-main{padding:16px 20px 60px; max-width:1100px; margin:0 auto}
-.card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:16px}
-.card h2{margin:0 0 14px; font-size:1.05rem}
-.grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px}
-label{display:block; font-size:.78rem; color:var(--muted); margin-bottom:4px; font-weight:600}
+.st-ativo{background:#2E7D5B}
+.st-processamento{background:#6B4BA8}
+.st-finalizado{background:#B23A3A}
+.st-a_cancelar{background:#F2B33D; color:#0F1E33}
+.st-cancelado{background:#111; color:#fff; border-color:#44536A}
+
+main{padding:20px 24px 60px; max-width:1100px; margin:0 auto}
+.card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:20px; margin-bottom:18px; box-shadow:var(--shadow)}
+.card h2{margin:0 0 14px; font-size:1.15rem; font-weight:600; letter-spacing:.03em; color:var(--navy)}
+.grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px}
+label{display:block; font-size:.78rem; color:var(--text-2); margin-bottom:4px; font-weight:600}
 input,select{
-  width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--line);
-  background:var(--panel2); color:var(--text); font-size:.9rem;
+  width:100%; padding:9px 11px; border-radius:8px; border:1px solid var(--line);
+  background:#fff; color:var(--text); font-size:.9rem; font-family:var(--font-body);
 }
-input:focus,select:focus{outline:2px solid var(--accent); outline-offset:1px}
+input:focus,select:focus{outline:none; border-color:var(--amber); box-shadow:0 0 0 3px rgba(242,179,61,.35)}
 .field{margin-bottom:2px}
-.actions{margin-top:14px; display:flex; gap:10px; align-items:center}
+.actions{margin-top:16px; display:flex; gap:10px; align-items:center}
+
+/* botão principal (âmbar) */
 button.primary{
-  background:var(--accent); color:#fff; border:none; padding:10px 18px;
-  border-radius:7px; cursor:pointer; font-weight:600; font-size:.9rem;
+  background:var(--amber); color:var(--navy); border:1.5px solid var(--amber); padding:10px 20px;
+  border-radius:8px; cursor:pointer; font-weight:700; font-size:.9rem;
 }
-button.primary:hover{opacity:.92}
-button.danger{background:transparent; color:var(--danger); border:1px solid var(--danger); padding:5px 10px; border-radius:6px; cursor:pointer; font-size:.75rem}
-#btn-add-linha{background:var(--panel2); color:var(--text); border:1px solid var(--line); padding:10px 16px; border-radius:7px; cursor:pointer; font-weight:600; font-size:.85rem}
-#btn-add-linha:hover{border-color:var(--accent)}
-.grupo-empenho{border:1px solid var(--line); border-radius:10px; margin-bottom:14px; overflow:hidden}
-.grupo-header{background:var(--panel2); padding:12px 16px; display:flex; flex-wrap:wrap; gap:6px 20px; align-items:center; justify-content:space-between}
-.grupo-header .info{display:flex; flex-wrap:wrap; gap:4px 18px; font-size:.8rem; color:var(--muted)}
-.grupo-header .info b{color:var(--text)}
-.grupo-header .totais{display:flex; gap:16px; font-size:.82rem}
-.grupo-header .totais span strong{display:block; font-size:.95rem}
-.grupo-empresa{border:1px solid var(--line); border-radius:10px; margin-bottom:14px; overflow:hidden}
-.empresa-header{background:var(--panel); padding:14px 16px; display:flex; flex-wrap:wrap; gap:10px 20px; align-items:center; justify-content:space-between; cursor:pointer; user-select:none}
-.empresa-header:hover{background:var(--panel2)}
+button.primary:hover:not(:disabled){background:#E5A52C; border-color:#E5A52C}
+button.danger{background:transparent; color:var(--err); border:1.5px solid var(--err); padding:5px 10px; border-radius:8px; cursor:pointer; font-size:.75rem}
+button.danger:hover:not(:disabled){background:rgba(178,58,58,.08)}
+#btn-add-linha{background:transparent; color:var(--navy); border:1.5px solid var(--navy); padding:10px 16px; border-radius:8px; cursor:pointer; font-weight:600; font-size:.85rem}
+#btn-add-linha:hover{background:var(--bg2); border-color:var(--navy)}
+
+/* empenhos, empresas e grupos */
+.grupo-empenho{border:1px solid var(--line); border-radius:var(--radius); margin-bottom:14px; overflow:hidden; background:var(--card)}
+.grupo-header{background:var(--bg2); padding:14px 18px; display:flex; flex-wrap:wrap; gap:6px 20px; align-items:center; justify-content:space-between}
+.grupo-header .info{display:flex; flex-wrap:wrap; gap:4px 18px; font-size:.8rem; color:var(--text-2)}
+.grupo-header .info b{color:var(--navy)}
+.grupo-header .totais{display:flex; gap:16px; font-size:.82rem; color:var(--text-2)}
+.grupo-header .totais span strong{display:block; font-size:.95rem; color:var(--navy)}
+.grupo-empresa{border:1px solid var(--line); border-radius:var(--radius); margin-bottom:14px; overflow:hidden; box-shadow:var(--shadow); background:var(--card)}
+.empresa-header{background:var(--card); padding:16px 18px; display:flex; flex-wrap:wrap; gap:10px 20px; align-items:center; justify-content:space-between; cursor:pointer; user-select:none}
+.empresa-header:hover{background:var(--bg2)}
 .empresa-header .info{display:flex; align-items:center; gap:12px}
-.empresa-header .seta{display:inline-block; transition:transform .15s; color:var(--muted); font-size:.75rem}
+.empresa-header .seta{display:inline-block; transition:transform .15s; color:var(--amber-dark); font-size:.75rem}
 .empresa-header .seta.aberta{transform:rotate(90deg)}
-.empresa-header .empresa-nome{font-weight:700; font-size:1rem}
-.empresa-header .muted-info{color:var(--muted); font-size:.78rem}
-.empresa-header .totais{display:flex; gap:16px; font-size:.82rem}
-.empresa-header .totais span strong{display:block; font-size:.95rem}
-.empresa-conteudo{padding:12px; background:var(--bg)}
-.subnav-btn{background:var(--panel); border:1px solid var(--line); color:var(--muted); padding:9px 16px; border-radius:7px; cursor:pointer; font-weight:600; font-size:.85rem}
-.subnav-btn.active{background:var(--tab-active); color:#fff; border-color:var(--tab-active)}
-.doc-item{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap}
+.empresa-header .empresa-nome{font-weight:700; font-size:1rem; color:var(--navy)}
+.empresa-header .muted-info{color:var(--text-2); font-size:.78rem}
+.empresa-header .totais{display:flex; gap:16px; font-size:.82rem; color:var(--text-2)}
+.empresa-header .totais span strong{display:block; font-size:.95rem; color:var(--navy)}
+.empresa-conteudo{padding:14px; background:var(--bg2)}
+.subnav-btn{background:transparent; border:1.5px solid var(--navy); color:var(--navy); padding:9px 16px; border-radius:8px; cursor:pointer; font-weight:600; font-size:.85rem}
+.subnav-btn:hover:not(:disabled){background:var(--bg2)}
+.subnav-btn.active{background:var(--navy); color:var(--on-dark); border-color:var(--navy); box-shadow:inset 0 -3px 0 var(--amber)}
+.doc-item{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap}
 .doc-item:last-child{border-bottom:none}
 .doc-item .doc-info{font-size:.85rem}
-.doc-item .doc-info .doc-nome{font-weight:600}
-.doc-item .doc-info .doc-meta{color:var(--muted); font-size:.75rem}
+.doc-item .doc-info .doc-nome{font-weight:600; color:var(--navy)}
+.doc-item .doc-info .doc-meta{color:var(--text-2); font-size:.75rem}
 .doc-item .doc-acoes{display:flex; gap:6px; flex-wrap:wrap}
-.nf-detail-row td{background:var(--panel2); padding:0}
 .nf-detail-inner{padding:12px 16px}
 .nf-detail-inner table{min-width:0}
-.btn-link{background:none; border:1px solid var(--line); color:var(--text); padding:6px 12px; border-radius:6px; cursor:pointer; font-size:.78rem; font-weight:600}
-.btn-link:hover{border-color:var(--accent)}
-.msg{font-size:.85rem; padding:8px 10px; border-radius:6px; margin-top:10px}
-.msg.ok{background:rgba(61,143,111,.15); color:var(--ok)}
-.msg.err{background:rgba(192,90,90,.15); color:var(--danger)}
-.tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:8px}
+.btn-link{background:transparent; border:1.5px solid var(--navy); color:var(--navy); padding:6px 12px; border-radius:8px; cursor:pointer; font-size:.78rem; font-weight:600}
+.btn-link:hover{background:var(--bg2); border-color:var(--navy)}
+
+/* mensagens */
+.msg{font-size:.85rem; padding:9px 12px; border-radius:8px; margin-top:10px}
+.msg.ok{background:rgba(46,125,91,.12); color:var(--ok)}
+.msg.err{background:rgba(178,58,58,.11); color:var(--err)}
+
+/* tabelas */
+.tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--card)}
 table{width:100%; border-collapse:collapse; font-size:.82rem; min-width:700px}
-th,td{padding:8px 10px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap}
-th{background:var(--panel2); color:var(--muted); font-weight:600; font-size:.72rem; text-transform:uppercase; letter-spacing:.4px}
+th,td{padding:9px 11px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap}
+th{background:var(--navy); color:var(--on-dark); font-weight:600; font-size:.72rem; text-transform:uppercase; letter-spacing:.5px}
+tbody tr:nth-child(even) td{background:var(--bg)}
+table tbody tr.nf-detail-row td{background:var(--bg2); padding:0}
 tr:last-child td{border-bottom:none}
-.saldo-baixo{color:var(--danger); font-weight:700}
-.saldo-zero{color:var(--muted); text-decoration:line-through}
-.pill{display:inline-block; padding:2px 8px; border-radius:20px; font-size:.7rem; font-weight:700}
-.pill.ok{background:rgba(61,143,111,.18); color:var(--ok)}
-.pill.warn{background:rgba(201,146,79,.18); color:var(--accent2)}
-.pill.off{background:var(--panel2); color:var(--muted)}
-.empty{color:var(--muted); font-size:.85rem; padding:20px; text-align:center}
+.saldo-baixo{color:var(--err); font-weight:700}
+.saldo-zero{color:var(--text-2); text-decoration:line-through}
+.pill{display:inline-block; padding:2px 9px; border-radius:20px; font-size:.7rem; font-weight:700}
+.pill.ok{background:rgba(46,125,91,.15); color:var(--ok)}
+.pill.warn{background:rgba(242,179,61,.28); color:var(--amber-dark)}
+.pill.off{background:var(--bg2); color:var(--text-2)}
+.empty{color:var(--text-2); font-size:.85rem; padding:20px; text-align:center}
 .search{margin-bottom:12px}
 .summary{display:flex; gap:16px; flex-wrap:wrap; margin-bottom:12px}
-.summary div{background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:10px 14px; font-size:.8rem}
-.summary strong{display:block; font-size:1.1rem; margin-top:2px}
+.summary div{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 14px; font-size:.8rem; color:var(--text-2); box-shadow:var(--shadow)}
+.summary strong{display:block; font-size:1.1rem; margin-top:2px; color:var(--navy)}
 .hidden{display:none !important}
-.login-wrap{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px}
-.login-card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:28px; width:100%; max-width:380px}
-.login-card h1{font-size:1.2rem; margin:0 0 4px}
-.login-card > p{color:var(--muted); font-size:.85rem; margin:0 0 18px}
+
+/* login */
+.login-wrap{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; background:var(--bg)}
+.login-card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:30px; width:100%; max-width:400px; box-shadow:var(--shadow); border-top:5px solid var(--amber)}
+.login-card h1{font-size:2.1rem; margin:0 0 6px; font-weight:700; letter-spacing:.1em; color:var(--navy)}
+.login-card .login-sub{color:var(--navy); font-size:.84rem; font-weight:600; margin:0 0 4px; line-height:1.35}
+.login-card .login-slogan{color:var(--amber-dark); font-size:.8rem; font-style:italic; margin:0 0 16px}
+.login-card > p{color:var(--text-2); font-size:.85rem; margin:0 0 18px}
 .login-card .field{margin-bottom:14px}
 .login-card .actions{flex-direction:column; align-items:stretch}
 .login-card .actions button{width:100%}
-#btn-criar-conta{background:var(--panel2); color:var(--text); border:1px solid var(--line); padding:10px 18px; border-radius:7px; cursor:pointer; font-weight:600; font-size:.9rem}
-header .head-row{display:flex; justify-content:space-between; align-items:flex-start; gap:12px}
-#user-email{color:var(--muted); font-size:.78rem}
-#btn-sair{background:none; border:1px solid var(--line); color:var(--text); padding:6px 12px; border-radius:6px; cursor:pointer; font-size:.78rem; white-space:nowrap}
+#btn-criar-conta{background:transparent; color:var(--navy); border:1.5px solid var(--navy); padding:10px 18px; border-radius:8px; cursor:pointer; font-weight:600; font-size:.9rem}
+#btn-criar-conta:hover{background:var(--bg2)}
+.login-footer{margin-top:20px; padding-top:14px; border-top:1px solid var(--line); text-align:center; color:var(--text-2); font-size:.74rem; letter-spacing:.04em}
+.app-footer{padding:18px 24px 26px; text-align:center; color:var(--text-2); font-size:.76rem; letter-spacing:.05em; border-top:1px solid var(--line); background:var(--bg)}
 </style>
 </head>
 <body>
 
 <div id="login-screen" class="login-wrap">
   <div class="login-card">
-    <h1>Controle de Empenhos &amp; Estoque</h1>
+    <h1>FAROL</h1>
+    <p class="login-sub">Ferramenta de Acompanhamento de Recursos, Orçamento e Liquidação</p>
+    <p class="login-slogan">Clareza nos saldos, segurança na navegação.</p>
     <p>Entre com seu email e senha para acessar de qualquer computador.</p>
     <div class="field"><label>Email</label><input id="login-email" type="email" placeholder="voce@exemplo.com"></div>
     <div class="field"><label>Senha</label><input id="login-senha" type="password" placeholder="Mínimo 6 caracteres"></div>
@@ -147,6 +203,7 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
       <button id="btn-criar-conta" type="button">Criar conta</button>
     </div>
     <div id="login-msg" class="msg hidden"></div>
+    <div class="login-footer">FAROL · Colégio Naval · Marinha do Brasil</div>
   </div>
 </div>
 
@@ -154,7 +211,7 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
 <header>
   <div class="head-row">
     <div>
-      <h1>Controle de Empenhos &amp; Estoque</h1>
+      <h1>FAROL</h1>
       <p>Cadastro de notas de empenho por item e baixa por notas fiscais</p>
     </div>
     <div style="text-align:right">
@@ -547,6 +604,7 @@ header .head-row{display:flex; justify-content:space-between; align-items:flex-s
   </section>
 
 </main>
+<footer class="app-footer">FAROL · Colégio Naval · Marinha do Brasil</footer>
 </div>
 
 <script type="module">

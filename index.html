@@ -224,6 +224,71 @@ header h1.ir-painel{cursor:pointer}
 .alerta:last-child{border-bottom:none}
 .tag{font-size:.7rem; padding:2px 8px; border-radius:10px; white-space:nowrap; font-weight:600}
 .tag.baixo{background:rgba(242,179,61,.28); color:#8A5500} .tag.vig{background:rgba(178,58,58,.14); color:#B23A3A}
+/* cabeçalho mais compacto em telas largas: slogan e descrição na mesma linha */
+@media (min-width:1000px){
+  header{padding:10px 24px 8px}
+  header h1{font-size:1.5rem; margin:0 0 2px}
+  header .head-row > div:first-child p{display:inline}
+  header .head-row > div:first-child p.header-slogan{margin:0}
+  header .head-row > div:first-child p:not(.header-slogan)::before{content:"  ·  "; white-space:pre; color:var(--on-dark-2)}
+}
+/* ---- Painel: grade de 12 colunas (layout montado pelo usuário) ---- */
+body:has(#tab-painel:not(.hidden)) #submenu{padding-top:0}
+#tab-painel .dash-top{margin-bottom:8px; justify-content:flex-start; align-items:baseline; gap:12px}
+#tab-painel .dash-top h2{font-size:1.15rem; display:inline}
+#tab-painel .dash-top small{margin-left:10px}
+.pgrid{display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); grid-auto-rows:52px; gap:10px; grid-auto-flow:row dense}
+.pgrid > *{min-width:0; margin:0 !important; overflow:hidden}
+.pgrid .kpi{padding:10px 12px; border-left-width:4px; grid-column:span 2; grid-row:span 2}
+.pgrid .kpi .rot{font-size:.64rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.pgrid .kpi .val{font-size:1.15rem; margin:3px 0 1px}
+.pgrid .kpi .sub{font-size:.7rem}
+.pgrid .barra{height:6px; margin-top:5px}
+.pgrid .kc-nome{font-size:.74rem; margin-top:2px}
+.pgrid .kc-slide .val{font-size:1.1rem}
+.pgrid .kc-dots{margin-top:3px; flex-wrap:nowrap}
+.pgrid .kc-dots span{margin-left:4px; white-space:nowrap}
+.pgrid .kc-nav button{padding:0 6px; line-height:18px}
+.pgrid > .card{padding:10px 12px; overflow:auto}
+.pgrid .card h2{font-size:.9rem; margin:0 0 6px}
+.pq-status{grid-column:span 3; grid-row:span 3}
+.pq-aten{grid-column:span 4; grid-row:span 3}
+.pq-nfs{grid-column:span 3; grid-row:span 3}
+.pq-cel{grid-column:span 2; grid-row:span 6}
+.pq-forn{grid-column:span 10; grid-row:span 3}
+.pgrid .st-linha{display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:6px; margin:0 0 3px; font-size:.76rem}
+.pgrid .st-linha .nome{width:auto}
+.pgrid .st-linha .tr{height:7px}
+.pgrid .st-linha .st-badge{font-size:.62rem; padding:1px 8px}
+.pgrid .dash-linha, .pgrid .alerta{padding:3px 0; font-size:.74rem; align-items:center; line-height:1.3}
+.pgrid .tag{font-size:.6rem; padding:1px 6px}
+.pgrid .dash-linha > span:first-child{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
+.pgrid .dash-linha > span:last-child, .pgrid .dash-linha > b{white-space:nowrap}
+.pgrid th, .pgrid td{padding:2px 8px; font-size:.72rem; line-height:1.35}
+.pgrid th{font-size:.62rem}
+.pgrid table{min-width:0}
+/* telas largas: o Painel cresce proporcionalmente para ocupar a tela sem rolar */
+@media (min-width:1101px){
+  main:has(#tab-painel:not(.hidden)){max-width:none; padding-top:10px; padding-bottom:10px}
+  body:has(#tab-painel:not(.hidden)) .app-footer{display:none}
+  #pz{width:1318px; margin:0 auto}
+}
+/* tablet / janelas estreitas: 2 colunas, rolagem normal */
+@media (max-width:1100px){
+  .pgrid{grid-template-columns:repeat(6,minmax(0,1fr)); grid-auto-rows:auto}
+  .pgrid > *{grid-row:auto !important; grid-column:span 3 !important; min-height:190px}
+  .pgrid > .kpi{grid-column:span 2 !important; min-height:100px}
+}
+@media (max-width:640px){
+  .pgrid > *, .pgrid > .kpi{grid-column:span 6 !important}
+}
+/* logotipo: farol no lugar do F, com o feixe iluminando o A */
+.logo-farol{display:inline-flex; align-items:baseline; line-height:1; position:relative; --cor:currentColor}
+.logo-farol .f-farol{height:1em; width:auto; margin-right:.05em; overflow:visible; position:relative; z-index:0; flex:none}
+.logo-farol .logo-txt{position:relative; z-index:1}
+.logo-farol .a-luz{background:linear-gradient(165deg,#FFD25A 0%,#F5B82E 28%,var(--cor) 62%); -webkit-background-clip:text; background-clip:text; color:transparent}
+header h1 .logo-farol{--cor:var(--on-dark)}
+.login-card h1 .logo-farol{--cor:var(--navy)}
 .login-card h1{font-size:2.1rem; margin:0 0 6px; font-weight:700; letter-spacing:.1em; color:var(--navy)}
 .login-card .login-sub{color:var(--navy); font-size:.84rem; font-weight:600; margin:0 0 4px; line-height:1.35}
 .login-card .login-slogan{color:var(--amber-dark); font-size:.8rem; font-style:italic; margin:0 0 16px}
@@ -251,7 +316,7 @@ header h1.ir-painel{cursor:pointer}
 <path d="M685 610 C750 520 780 400 735 250" stroke-width="8"/><path d="M699.9 587.8 C659.6 578.4 643.3 538.6 648.4 511.3 C671.5 528.3 693.2 558.1 699.9 587.8 Z M699.9 587.8 C720.3 616.0 754.9 612.6 773.1 597.3 C753.0 585.9 723.9 580.9 699.9 587.8 Z M721.4 548.3 C684.1 544.2 665.1 510.0 666.7 484.9 C689.4 497.6 712.1 522.2 721.4 548.3 Z M721.4 548.3 C742.9 571.6 773.7 564.7 788.5 548.9 C769.1 540.8 742.4 539.5 721.4 548.3 Z M738.3 505.6 C704.5 506.1 683.8 477.8 682.4 455.1 C704.1 464.0 727.1 483.3 738.3 505.6 Z M738.3 505.6 C760.0 523.9 786.8 514.3 798.2 498.6 C780.0 493.5 756.0 495.4 738.3 505.6 Z M750.0 459.7 C720.3 464.0 698.8 441.4 695.0 421.6 C715.1 427.0 737.6 441.4 750.0 459.7 Z M750.0 459.7 C771.2 473.3 793.6 461.8 801.9 446.7 C785.3 444.3 764.4 448.7 750.0 459.7 Z M755.9 410.5 C730.6 417.6 709.5 400.5 703.9 383.8 C722.0 386.1 743.1 396.1 755.9 410.5 Z M755.9 410.5 C775.8 420.0 793.9 407.5 799.4 393.5 C784.7 393.3 767.1 399.4 755.9 410.5 Z M755.4 358.2 C734.8 367.0 715.0 354.7 708.5 341.1 C724.0 341.2 743.0 347.3 755.4 358.2 Z M755.4 358.2 C773.3 364.1 787.4 351.6 790.5 339.0 C778.0 340.5 763.7 347.6 755.4 358.2 Z M748.0 302.7 C731.9 312.0 714.3 303.8 707.6 293.3 C720.4 291.8 736.7 295.0 748.0 302.7 Z M748.0 302.7 C763.4 305.8 773.7 294.0 775.1 283.4 C764.9 285.8 753.8 293.1 748.0 302.7 Z M735.0 250.0 C713.6 234.5 712.8 206.6 721.6 191.4 C731.4 207.2 737.5 230.5 735.0 250.0 Z" fill="#0F1E33" stroke="none"/>
 </svg>
   <div class="login-card">
-    <h1>FAROL</h1>
+    <h1><span class="logo-farol" role="img" aria-label="FAROL"><svg class="f-farol" viewBox="0 0 58 100" aria-hidden="true" focusable="false"><defs><mask id="lgLm"><rect x="-10" y="-20" width="80" height="130" fill="#fff"/><rect x="10" y="9" width="7" height="8" rx="1" fill="#000"/><polygon points="4.6,66 22.4,66 22.9,74 4.1,74" fill="#000"/><polygon points="3.5,86 23.5,86 24,93 3,93" fill="#000"/></mask><linearGradient id="lgLg" gradientUnits="userSpaceOnUse" x1="22" y1="0" x2="128" y2="0"><stop offset="0" stop-color="#F5B82E" stop-opacity="1"/><stop offset=".3" stop-color="#F5B82E" stop-opacity=".9"/><stop offset=".55" stop-color="#F5B82E" stop-opacity=".4"/><stop offset="1" stop-color="#F5B82E" stop-opacity="0"/></linearGradient></defs><polygon points="22,8 128,-9 128,31 22,20" fill="url(#lgLg)"/><g mask="url(#lgLm)" fill="currentColor"><path d="M4 7 Q13.5 -3 23 7 Z"/><rect x="5" y="7" width="17" height="14"/><rect x="2" y="21" width="23" height="4"/><polygon points="5,25 22,25 25,100 2,100"/><rect x="20" y="44" width="24" height="12"/></g><rect x="10" y="9" width="7" height="8" rx="1" fill="#F5B82E"/></svg><span class="logo-txt" aria-hidden="true"><span class="a-luz">A</span>ROL</span></span></h1>
     <p class="login-sub">Ferramenta de Acompanhamento de Recursos, Orçamento e Liquidação</p>
     <p class="login-slogan">Clareza nos saldos, segurança na navegação.</p>
     <p>Entre com seu email e senha para acessar de qualquer computador.</p>
@@ -270,7 +335,7 @@ header h1.ir-painel{cursor:pointer}
 <header>
   <div class="head-row">
     <div>
-      <h1 class="ir-painel" id="btn-ir-painel" title="Ir para o Painel">FAROL</h1>
+      <h1 class="ir-painel" id="btn-ir-painel" title="Ir para o Painel"><span class="logo-farol" role="img" aria-label="FAROL"><svg class="f-farol" viewBox="0 0 58 100" aria-hidden="true" focusable="false"><defs><mask id="lgHm"><rect x="-10" y="-20" width="80" height="130" fill="#fff"/><rect x="10" y="9" width="7" height="8" rx="1" fill="#000"/><polygon points="4.6,66 22.4,66 22.9,74 4.1,74" fill="#000"/><polygon points="3.5,86 23.5,86 24,93 3,93" fill="#000"/></mask><linearGradient id="lgHg" gradientUnits="userSpaceOnUse" x1="22" y1="0" x2="128" y2="0"><stop offset="0" stop-color="#F5B82E" stop-opacity="1"/><stop offset=".3" stop-color="#F5B82E" stop-opacity=".9"/><stop offset=".55" stop-color="#F5B82E" stop-opacity=".4"/><stop offset="1" stop-color="#F5B82E" stop-opacity="0"/></linearGradient></defs><polygon points="22,8 128,-9 128,31 22,20" fill="url(#lgHg)"/><g mask="url(#lgHm)" fill="currentColor"><path d="M4 7 Q13.5 -3 23 7 Z"/><rect x="5" y="7" width="17" height="14"/><rect x="2" y="21" width="23" height="4"/><polygon points="5,25 22,25 25,100 2,100"/><rect x="20" y="44" width="24" height="12"/></g><rect x="10" y="9" width="7" height="8" rx="1" fill="#F5B82E"/></svg><span class="logo-txt" aria-hidden="true"><span class="a-luz">A</span>ROL</span></span></h1>
       <p class="header-slogan">Clareza nos saldos, segurança na navegação.</p>
       <p>Cadastro de notas de empenho por item e baixa por notas fiscais</p>
     </div>
@@ -376,12 +441,12 @@ header h1.ir-painel{cursor:pointer}
 
 <main>
 
-  <section id="tab-painel" class="tab">
+  <section id="tab-painel" class="tab"><div id="pz">
     <div class="dash-top">
       <div><h2>PAINEL</h2><small id="painel-atualizado">Resumo geral do sistema</small></div>
     </div>
     <div id="painel-conteudo"><div class="empty">Carregando...</div></div>
-  </section>
+  </div></section>
 
   <section id="tab-cadastro" class="tab hidden">
     <div class="card" id="card-multi">
@@ -1145,7 +1210,7 @@ function moverCarrossel(dir){
   kcIndice = ((kcIndice + dir) % n + n) % n;
   tr.style.transform = 'translateX(' + (-100*kcIndice) + '%)';
   document.querySelectorAll('#kc-dots i').forEach((d,i)=>d.classList.toggle('on', i===kcIndice));
-  const lbl = document.getElementById('kc-pos'); if(lbl) lbl.textContent = (kcIndice+1)+' de '+n+' célula(s)';
+  const lbl = document.getElementById('kc-pos'); if(lbl) lbl.textContent = (kcIndice+1)+'/'+n;
 }
 window.moverCarrossel = moverCarrossel;
 function renderPainel(){
@@ -1204,42 +1269,36 @@ function renderPainel(){
   ].join('') || `<div class="empty">Nenhum ponto de atenção no momento.</div>`;
 
   const ultNF = listaNF.slice().sort((a,b)=>(b.createdAt-a.createdAt)||(b.data||'').localeCompare(a.data||'')).slice(0,5);
-  const linhasNF = ultNF.length ? ultNF.map(g=>`<div class="dash-linha"><span>NF ${g.numeroNF} · ${empresaDoNE(g.ne)||g.ne}</span><span>${fmtDataBR(g.data)} · <b>${fmtMoney(arredMoeda(g.valor))}</b></span></div>`).join('')
+  const linhasNF = ultNF.length ? ultNF.map(g=>`<div class="dash-linha"><span title="NF ${g.numeroNF} · ${empresaDoNE(g.ne)||g.ne}">NF ${g.numeroNF} · ${empresaDoNE(g.ne)||g.ne}</span><span>${fmtDataBR(g.data).slice(0,5)} · <b>${fmtMoney(arredMoeda(g.valor))}</b></span></div>`).join('')
     : `<div class="empty">Nenhuma nota fiscal registrada ainda.</div>`;
 
   const celOrd = celulas.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
   kcIndice = 0;
   const kpiCel = celOrd.length ? `
       <div class="kpi verde"><div class="kpi-cel-top"><div class="rot">Saldo nas células de crédito</div>
-        ${celOrd.length>1?`<div class="kc-nav"><button type="button" onclick="moverCarrossel(-1)" title="Anterior">‹</button><button type="button" onclick="moverCarrossel(1)" title="Próxima">›</button></div>`:''}</div>
+</div>
         <div class="kc-janela" id="kc-janela"><div class="kc-trilho" id="kc-trilho">
           ${celOrd.map(c=>`<div class="kc-slide"><div class="kc-nome" title="${c.nome}">${c.nome}</div><div class="val">${fmtMoney(c.saldo)}</div></div>`).join('')}
         </div></div>
-        <div class="kc-dots" id="kc-dots">${celOrd.length<=12?celOrd.map((c,i)=>`<i class="${i===0?'on':''}"></i>`).join(''):''}<span id="kc-pos">1 de ${celOrd.length} célula(s)</span></div></div>`
+        <div class="kc-dots" id="kc-dots">${celOrd.length<=12?celOrd.map((c,i)=>`<i class="${i===0?'on':''}"></i>`).join(''):''}<span id="kc-pos">1/${celOrd.length}</span>${celOrd.length>1?`<div class="kc-nav" style="margin-left:auto"><button type="button" onclick="moverCarrossel(-1)" title="Anterior">‹</button><button type="button" onclick="moverCarrossel(1)" title="Próxima">›</button></div>`:''}</div></div>`
     : `<div class="kpi verde"><div class="rot">Saldo nas células de crédito</div><div class="val">${fmtMoney(0)}</div><div class="sub">Nenhuma célula cadastrada</div></div>`;
-  const listaCel = celOrd.length ? celOrd.map(c=>`<div class="dash-linha"><span>${c.nome}</span><b>${fmtMoney(c.saldo)}</b></div>`).join('')
+  const listaCel = celOrd.length ? celOrd.map(c=>`<div class="dash-linha"><span title="${c.nome}">${c.nome}</span><b>${fmtMoney(c.saldo)}</b></div>`).join('')
     : `<div class="empty">Nenhuma célula de crédito cadastrada.</div>`;
 
   el.innerHTML = `
-    <div class="kpis">
+    <div class="pgrid">
       <div class="kpi"><div class="rot">Total empenhado</div><div class="val">${fmtMoney(totalEmp)}</div><div class="sub">${nes.length-cont.cancelado} empenho(s) · ${validos.length} item(ns)</div></div>
-      <div class="kpi azul"><div class="rot">Saldo disponível</div><div class="val">${fmtMoney(saldoDisp)}</div><div class="sub">${fmtPct(pctSaldo)} do total empenhado</div><div class="barra"><i style="width:${pctExec}%"></i></div><div class="sub" style="margin-top:4px">${fmtPct(pctExec)} já executado</div></div>
+      <div class="kpi azul"><div class="rot">Saldo disponível</div><div class="val">${fmtMoney(saldoDisp)}</div><div class="sub">${fmtPct(pctSaldo)} do total empenhado</div><div class="barra"><i style="width:${pctExec}%"></i></div></div>
       ${kpiCel}
       <div class="kpi amar"><div class="rot">Notas fiscais no mês</div><div class="val">${nfMes.length}</div><div class="sub">${fmtMoney(valorNfMes)} baixados no mês</div></div>
       <div class="kpi"><div class="rot">Pedidos no mês</div><div class="val">${pedMes.length}</div><div class="sub">${fmtMoney(valorPedMes)} · ${fornPedMes} fornecedor(es)</div></div>
-      <div class="kpi verm"><div class="rot">Pontos de atenção</div><div class="val">${qtdAtencao}</div><div class="sub">${baixos.length} item(ns) com saldo baixo · ${vig.length} vigência(s) a vencer</div></div>
-    </div>
-    <div class="dash-grid">
-      <div>
-        <div class="card"><h2>Empenhos por status</h2>${linhasSt}
-          <h2 style="margin-top:22px">Maiores saldos por fornecedor</h2>
-          <div class="tablewrap"><table><thead><tr><th>Fornecedor</th><th>Empenhos</th><th>Saldo</th><th>Executado</th></tr></thead><tbody>${linhasForn}</tbody></table></div>
-        </div>
-        <div class="card"><h2>Últimas notas fiscais</h2>${linhasNF}</div>
-      </div>
-      <div>
-        <div class="card"><h2>Pontos de atenção</h2>${alertas}</div>
-        <div class="card"><h2>Células de crédito</h2>${listaCel}</div>
+      <div class="kpi verm"><div class="rot">Pontos de atenção</div><div class="val">${qtdAtencao}</div><div class="sub">${baixos.length} saldo baixo · ${vig.length} vigência(s) a vencer</div></div>
+      <div class="card pq-status"><h2>Empenhos por status</h2>${linhasSt}</div>
+      <div class="card pq-aten"><h2>Pontos de atenção</h2>${alertas}</div>
+      <div class="card pq-nfs"><h2>Últimas notas fiscais</h2>${linhasNF}</div>
+      <div class="card pq-cel"><h2>Células de crédito</h2>${listaCel}</div>
+      <div class="card pq-forn"><h2>Maiores saldos por fornecedor</h2>
+        <div class="tablewrap"><table><thead><tr><th>Fornecedor</th><th>Empenhos</th><th>Saldo</th><th>Executado</th></tr></thead><tbody>${linhasForn}</tbody></table></div>
       </div>
     </div>`;
 
@@ -1256,10 +1315,26 @@ function renderPainel(){
   }
 }
 
+// escala o Painel proporcionalmente ao tamanho da tela (mesmo layout em qualquer resolução, sem rolar)
+function ajustarAlturaPainel(){
+  const p = document.getElementById('tab-painel'); const pz = document.getElementById('pz');
+  if(!p || !pz || p.classList.contains('hidden')) return;
+  pz.style.zoom = '';
+  if(window.innerWidth <= 1100) return;
+  const main = p.closest('main');
+  const cs = getComputedStyle(main);
+  const larguraUtil = main.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const topo = pz.getBoundingClientRect().top;
+  const alturaUtil = window.innerHeight - topo - 12;
+  const f = Math.max(0.7, Math.min(larguraUtil / pz.offsetWidth, alturaUtil / pz.offsetHeight));
+  pz.style.zoom = f.toFixed(4);
+}
+window.addEventListener('resize', ajustarAlturaPainel);
+
 function abrirTela(tab){
   document.querySelectorAll('.tab').forEach(t=>t.classList.add('hidden'));
   document.getElementById('tab-'+tab).classList.remove('hidden');
-  if(tab==='painel') renderPainel();
+  if(tab==='painel'){ renderPainel(); ajustarAlturaPainel(); }
   if(tab==='saldos') renderSaldos();
   if(tab==='carteira') renderCarteira();
   if(tab==='cadastro') renderSelectCelulaCadastro();

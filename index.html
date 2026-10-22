@@ -186,6 +186,44 @@ body.perfil-restrito button[onclick^="removerAssinatura"], body.perfil-restrito 
 body.perfil-restrito .btn-cel-renomear, body.perfil-restrito .btn-cel-excluir{display:none !important}
 .aviso-restrito{margin:0; padding:9px 24px; background:var(--bg2); border-bottom:1px solid var(--line); color:var(--navy); font-size:.82rem}
 .resp-acao{color:var(--text-2); font-size:.78rem}
+/* ---- Painel (dashboard) ---- */
+header h1.ir-painel{cursor:pointer}
+.dash-top{display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:8px; margin-bottom:14px}
+.dash-top h2{margin:0; font-family:var(--font-title); color:var(--navy); letter-spacing:.04em}
+.dash-top small{color:var(--text-2)}
+.kpis{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:18px}
+@media(max-width:860px){.kpis{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.kpis{grid-template-columns:1fr}}
+.kpis > .kpi{min-width:0}
+.kpi{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow); border-left:5px solid var(--navy)}
+.kpi .rot{font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-2)}
+.kpi .val{font-family:var(--font-title); font-size:1.5rem; white-space:nowrap; color:var(--navy); margin:4px 0 2px; font-variant-numeric:tabular-nums}
+.kpi .sub{font-size:.78rem; color:var(--text-2)}
+.kpi.azul{border-left-color:#2F6FED} .kpi.verde{border-left-color:#2E7D5B} .kpi.amar{border-left-color:#F2B33D} .kpi.verm{border-left-color:#B23A3A}
+.barra{height:8px; background:var(--bg2); border-radius:6px; overflow:hidden; margin-top:8px}
+.barra i{display:block; height:100%; background:#2F6FED}
+.kpi-cel-top{display:flex; justify-content:space-between; align-items:center; gap:6px}
+.kc-nav{display:flex; gap:4px} .kc-nav button{padding:0 8px; line-height:20px; border-radius:6px; border:1px solid var(--line); background:var(--card); cursor:pointer; font-size:.85rem}
+.kc-janela{overflow:hidden; margin-top:2px; width:100%}
+.kc-trilho{display:flex; transition:transform .45s ease}
+.kc-slide{flex:0 0 100%; min-width:0}
+.kc-nome{font-size:.82rem; font-weight:600; color:#2E7D5B; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.kc-slide .val{margin-top:0}
+.kc-dots{display:flex; align-items:center; gap:5px; margin-top:6px; flex-wrap:wrap}
+.kc-dots i{width:7px; height:7px; border-radius:50%; background:var(--line); transition:all .3s} .kc-dots i.on{background:#2E7D5B; width:16px; border-radius:4px}
+.kc-dots span{font-size:.74rem; color:var(--text-2); margin-left:6px}
+.dash-grid{display:grid; grid-template-columns:1.2fr 1fr; gap:18px}
+@media(max-width:860px){.dash-grid{grid-template-columns:1fr}}
+.st-linha{display:flex; align-items:center; gap:10px; margin:9px 0; font-size:.86rem}
+.st-linha .nome{width:120px} .st-linha .tr{flex:1; height:10px; background:var(--bg2); border-radius:6px; overflow:hidden}
+.st-linha .tr i{display:block; height:100%}
+.st-linha .n{width:28px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600}
+.dash-linha{display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-size:.86rem}
+.dash-linha:last-child{border-bottom:none}
+.alerta{display:flex; gap:10px; align-items:flex-start; padding:9px 0; border-bottom:1px solid var(--line); font-size:.85rem}
+.alerta:last-child{border-bottom:none}
+.tag{font-size:.7rem; padding:2px 8px; border-radius:10px; white-space:nowrap; font-weight:600}
+.tag.baixo{background:rgba(242,179,61,.28); color:#8A5500} .tag.vig{background:rgba(178,58,58,.14); color:#B23A3A}
 .login-card h1{font-size:2.1rem; margin:0 0 6px; font-weight:700; letter-spacing:.1em; color:var(--navy)}
 .login-card .login-sub{color:var(--navy); font-size:.84rem; font-weight:600; margin:0 0 4px; line-height:1.35}
 .login-card .login-slogan{color:var(--amber-dark); font-size:.8rem; font-style:italic; margin:0 0 16px}
@@ -232,7 +270,7 @@ body.perfil-restrito .btn-cel-renomear, body.perfil-restrito .btn-cel-excluir{di
 <header>
   <div class="head-row">
     <div>
-      <h1>FAROL</h1>
+      <h1 class="ir-painel" id="btn-ir-painel" title="Ir para o Painel">FAROL</h1>
       <p class="header-slogan">Clareza nos saldos, segurança na navegação.</p>
       <p>Cadastro de notas de empenho por item e baixa por notas fiscais</p>
     </div>
@@ -313,13 +351,13 @@ body.perfil-restrito .btn-cel-renomear, body.perfil-restrito .btn-cel-excluir{di
 </div>
 
 <nav>
-  <button data-grupo="empenho" class="active">Empenho</button>
+  <button data-grupo="empenho">Empenho</button>
   <button data-grupo="controle">Controle</button>
   <button data-grupo="pedidos">Pedidos</button>
   <button data-grupo="config">Configurações</button>
 </nav>
 <div id="submenu">
-  <div class="submenu-grupo" data-grupo="empenho">
+  <div class="submenu-grupo hidden" data-grupo="empenho">
     <button class="submenu-btn active" data-tab="cadastro" type="button">Cadastrar Empenho</button>
     <button class="submenu-btn" data-tab="saldos" type="button">Saldo de Empenho</button>
     <button class="submenu-btn" data-tab="carteira" type="button">Controle de Saldo</button>
@@ -338,7 +376,14 @@ body.perfil-restrito .btn-cel-renomear, body.perfil-restrito .btn-cel-excluir{di
 
 <main>
 
-  <section id="tab-cadastro" class="tab">
+  <section id="tab-painel" class="tab">
+    <div class="dash-top">
+      <div><h2>PAINEL</h2><small id="painel-atualizado">Resumo geral do sistema</small></div>
+    </div>
+    <div id="painel-conteudo"><div class="empty">Carregando...</div></div>
+  </section>
+
+  <section id="tab-cadastro" class="tab hidden">
     <div class="card" id="card-multi">
       <h2>Cadastrar nota de empenho</h2>
       <p style="color:var(--muted); font-size:.78rem; margin-top:-8px; margin-bottom:14px">Preencha os dados comuns da nota de empenho uma vez e adicione quantos itens forem necessários.</p>
@@ -958,6 +1003,7 @@ async function mostrarApp(user){
   popularSelectEmpresaPedido(); popularSelectAssinaturas(); renderPedidos();
   popularSelectEmpresaDoc(); renderDocumentos();
   renderSubnavUsuarios();
+  abrirPainel();
   return { sucesso:true };
 }
 function loginMsg(texto, ok){
@@ -1081,9 +1127,139 @@ if(auth){
 // ---- Tabs ----
 
 // Menu principal (4 grupos) + submenu da área. As telas (#tab-*) continuam as mesmas de antes.
+// ---- Painel (dashboard) ----
+let painelTimer = null;
+function abrirPainel(){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#submenu .submenu-grupo').forEach(g=>g.classList.add('hidden'));
+  abrirTela('painel');
+}
+document.getElementById('btn-ir-painel').addEventListener('click', abrirPainel);
+function isoHoje(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function diasAte(iso){ return Math.round((new Date(iso+'T00:00:00') - new Date(isoHoje()+'T00:00:00'))/86400000); }
+function fmtDataBR(iso){ return iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.split('-').reverse().join('/') : (iso||'-'); }
+let kcIndice = 0;
+function moverCarrossel(dir){
+  const tr = document.getElementById('kc-trilho'); if(!tr) return;
+  const n = tr.children.length; if(n<1) return;
+  kcIndice = ((kcIndice + dir) % n + n) % n;
+  tr.style.transform = 'translateX(' + (-100*kcIndice) + '%)';
+  document.querySelectorAll('#kc-dots i').forEach((d,i)=>d.classList.toggle('on', i===kcIndice));
+  const lbl = document.getElementById('kc-pos'); if(lbl) lbl.textContent = (kcIndice+1)+' de '+n+' célula(s)';
+}
+window.moverCarrossel = moverCarrossel;
+function renderPainel(){
+  const el = document.getElementById('painel-conteudo'); if(!el) return;
+  if(painelTimer){ clearInterval(painelTimer); painelTimer = null; }
+  const hoje = isoHoje(); const mesISO = hoje.slice(0,7); const mesBR = hoje.slice(5,7)+'/'+hoje.slice(0,4);
+  document.getElementById('painel-atualizado').textContent = 'Resumo geral do sistema · atualizado em '+new Date().toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'});
+
+  const porNE = {}; empenhos.forEach(e=>{ (porNE[e.numero]=porNE[e.numero]||[]).push(e); });
+  const nes = Object.keys(porNE);
+  const stNE = {}; nes.forEach(ne=>{ stNE[ne] = statusDeItens(porNE[ne]); });
+  const cont = {ativo:0,processamento:0,finalizado:0,a_cancelar:0,cancelado:0};
+  nes.forEach(ne=>{ if(cont[stNE[ne]]!==undefined) cont[stNE[ne]]++; });
+  const validos = empenhos.filter(e=>stNE[e.numero]!=='cancelado');
+  const totalEmp = arredMoeda(validos.reduce((t,e)=>t+(e.valorTotal||0),0));
+  const saldoDisp = arredMoeda(validos.reduce((t,e)=>t+(e.saldoValor||0),0));
+  const pctSaldo = totalEmp>0 ? saldoDisp/totalEmp*100 : 0;
+  const pctExec = totalEmp>0 ? 100-pctSaldo : 0;
+  const fmtPct = v=>v.toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';
+
+  // NFs do mês (agrupadas por número + empenho)
+  const gruposNF = {};
+  notasFiscais.forEach(n=>{ const k=n.numeroNF+'||'+n.numeroEmpenho;
+    if(!gruposNF[k]) gruposNF[k]={numeroNF:n.numeroNF, ne:n.numeroEmpenho, data:n.data||'', valor:0, createdAt:0};
+    gruposNF[k].valor += n.valorBaixado||0; gruposNF[k].createdAt = Math.max(gruposNF[k].createdAt, n.createdAt||0); });
+  const listaNF = Object.values(gruposNF);
+  const nfMes = listaNF.filter(g=>(g.data||'').startsWith(mesISO));
+  const valorNfMes = arredMoeda(nfMes.reduce((t,g)=>t+g.valor,0));
+  const pedMes = pedidos.filter(p=>(p.dataEmissao||'').endsWith(mesBR));
+  const valorPedMes = arredMoeda(pedMes.reduce((t,p)=>t+(p.valorTotal||0),0));
+  const fornPedMes = new Set(pedMes.map(p=>p.empresaNome)).size;
+
+  // pontos de atenção
+  const baixos = empenhos.filter(e=>stNE[e.numero]==='ativo' && e.saldoQtd>0 && e.saldoQtd < e.qtd*0.2)
+    .map(e=>({e, pct:e.qtd>0?e.saldoQtd/e.qtd*100:0})).sort((a,b)=>a.pct-b.pct);
+  const vig = nes.filter(ne=>['ativo','processamento'].includes(stNE[ne]))
+    .map(ne=>{ const f=porNE[ne][0]; const v=f.vigencia; if(!/^\d{4}-\d{2}-\d{2}$/.test(v||'')) return null;
+      const saldo = arredMoeda(porNE[ne].reduce((t,e)=>t+(e.saldoValor||0),0)); const d = diasAte(v);
+      return (saldo>0 && d<=30) ? {ne, v, d, saldo} : null; }).filter(Boolean).sort((a,b)=>a.d-b.d);
+  const qtdAtencao = baixos.length + vig.length;
+
+  const corSt = {ativo:'#2E7D5B',processamento:'#6B46C1',finalizado:'#B23A3A',a_cancelar:'#F2B33D',cancelado:'#111'};
+  const linhasSt = Object.keys(cont).map(st=>`<div class="st-linha"><span class="nome"><span class="st-badge st-${st}">${STATUS_INFO[st].nome}</span></span>
+    <span class="tr"><i style="width:${nes.length?cont[st]/nes.length*100:0}%;background:${corSt[st]}"></i></span><span class="n">${cont[st]}</span></div>`).join('');
+
+  const forn = {};
+  validos.forEach(e=>{ const k=e.empresa||'(sem empresa)'; if(!forn[k]) forn[k]={nes:new Set(), total:0, saldo:0};
+    forn[k].nes.add(e.numero); forn[k].total+=e.valorTotal||0; forn[k].saldo+=e.saldoValor||0; });
+  const topForn = Object.entries(forn).sort((a,b)=>b[1].saldo-a[1].saldo).slice(0,5);
+  const linhasForn = topForn.length ? topForn.map(([nome,f])=>`<tr><td>${nome}</td><td>${f.nes.size}</td><td>${fmtMoney(arredMoeda(f.saldo))}</td><td>${f.total>0?fmtPct(100-f.saldo/f.total*100):'-'}</td></tr>`).join('')
+    : `<tr><td colspan="4" class="empty">Nenhum empenho cadastrado.</td></tr>`;
+
+  const alertas = [
+    ...baixos.slice(0,6).map(({e,pct})=>`<div class="alerta"><span class="tag baixo">Saldo baixo</span><span><b>${e.numero}</b> · ${e.item} — ${fmtQtd(e.saldoQtd)} ${e.uf||''} restantes (${fmtPct(pct)})</span></div>`),
+    ...vig.slice(0,6).map(x=>`<div class="alerta"><span class="tag vig">Vigência</span><span><b>${x.ne}</b> · ${x.d<0?`vencida em ${fmtDataBR(x.v)} (há ${-x.d} dia(s))`:(x.d===0?`vence hoje (${fmtDataBR(x.v)})`:`vence em ${fmtDataBR(x.v)} (${x.d} dia(s))`)} — saldo ${fmtMoney(x.saldo)}</span></div>`)
+  ].join('') || `<div class="empty">Nenhum ponto de atenção no momento.</div>`;
+
+  const ultNF = listaNF.slice().sort((a,b)=>(b.createdAt-a.createdAt)||(b.data||'').localeCompare(a.data||'')).slice(0,5);
+  const linhasNF = ultNF.length ? ultNF.map(g=>`<div class="dash-linha"><span>NF ${g.numeroNF} · ${empresaDoNE(g.ne)||g.ne}</span><span>${fmtDataBR(g.data)} · <b>${fmtMoney(arredMoeda(g.valor))}</b></span></div>`).join('')
+    : `<div class="empty">Nenhuma nota fiscal registrada ainda.</div>`;
+
+  const celOrd = celulas.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+  kcIndice = 0;
+  const kpiCel = celOrd.length ? `
+      <div class="kpi verde"><div class="kpi-cel-top"><div class="rot">Saldo nas células de crédito</div>
+        ${celOrd.length>1?`<div class="kc-nav"><button type="button" onclick="moverCarrossel(-1)" title="Anterior">‹</button><button type="button" onclick="moverCarrossel(1)" title="Próxima">›</button></div>`:''}</div>
+        <div class="kc-janela" id="kc-janela"><div class="kc-trilho" id="kc-trilho">
+          ${celOrd.map(c=>`<div class="kc-slide"><div class="kc-nome" title="${c.nome}">${c.nome}</div><div class="val">${fmtMoney(c.saldo)}</div></div>`).join('')}
+        </div></div>
+        <div class="kc-dots" id="kc-dots">${celOrd.length<=12?celOrd.map((c,i)=>`<i class="${i===0?'on':''}"></i>`).join(''):''}<span id="kc-pos">1 de ${celOrd.length} célula(s)</span></div></div>`
+    : `<div class="kpi verde"><div class="rot">Saldo nas células de crédito</div><div class="val">${fmtMoney(0)}</div><div class="sub">Nenhuma célula cadastrada</div></div>`;
+  const listaCel = celOrd.length ? celOrd.map(c=>`<div class="dash-linha"><span>${c.nome}</span><b>${fmtMoney(c.saldo)}</b></div>`).join('')
+    : `<div class="empty">Nenhuma célula de crédito cadastrada.</div>`;
+
+  el.innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><div class="rot">Total empenhado</div><div class="val">${fmtMoney(totalEmp)}</div><div class="sub">${nes.length-cont.cancelado} empenho(s) · ${validos.length} item(ns)</div></div>
+      <div class="kpi azul"><div class="rot">Saldo disponível</div><div class="val">${fmtMoney(saldoDisp)}</div><div class="sub">${fmtPct(pctSaldo)} do total empenhado</div><div class="barra"><i style="width:${pctExec}%"></i></div><div class="sub" style="margin-top:4px">${fmtPct(pctExec)} já executado</div></div>
+      ${kpiCel}
+      <div class="kpi amar"><div class="rot">Notas fiscais no mês</div><div class="val">${nfMes.length}</div><div class="sub">${fmtMoney(valorNfMes)} baixados no mês</div></div>
+      <div class="kpi"><div class="rot">Pedidos no mês</div><div class="val">${pedMes.length}</div><div class="sub">${fmtMoney(valorPedMes)} · ${fornPedMes} fornecedor(es)</div></div>
+      <div class="kpi verm"><div class="rot">Pontos de atenção</div><div class="val">${qtdAtencao}</div><div class="sub">${baixos.length} item(ns) com saldo baixo · ${vig.length} vigência(s) a vencer</div></div>
+    </div>
+    <div class="dash-grid">
+      <div>
+        <div class="card"><h2>Empenhos por status</h2>${linhasSt}
+          <h2 style="margin-top:22px">Maiores saldos por fornecedor</h2>
+          <div class="tablewrap"><table><thead><tr><th>Fornecedor</th><th>Empenhos</th><th>Saldo</th><th>Executado</th></tr></thead><tbody>${linhasForn}</tbody></table></div>
+        </div>
+        <div class="card"><h2>Últimas notas fiscais</h2>${linhasNF}</div>
+      </div>
+      <div>
+        <div class="card"><h2>Pontos de atenção</h2>${alertas}</div>
+        <div class="card"><h2>Células de crédito</h2>${listaCel}</div>
+      </div>
+    </div>`;
+
+  // passa as células automaticamente (pausa com o mouse em cima)
+  const jan = document.getElementById('kc-janela');
+  if(jan && celOrd.length>1){
+    let pausado = false;
+    jan.addEventListener('mouseenter', ()=>{ pausado = true; });
+    jan.addEventListener('mouseleave', ()=>{ pausado = false; });
+    painelTimer = setInterval(()=>{
+      if(pausado || document.getElementById('tab-painel').classList.contains('hidden')) return;
+      moverCarrossel(1);
+    }, 4000);
+  }
+}
+
 function abrirTela(tab){
   document.querySelectorAll('.tab').forEach(t=>t.classList.add('hidden'));
   document.getElementById('tab-'+tab).classList.remove('hidden');
+  if(tab==='painel') renderPainel();
   if(tab==='saldos') renderSaldos();
   if(tab==='carteira') renderCarteira();
   if(tab==='cadastro') renderSelectCelulaCadastro();
